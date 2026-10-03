@@ -16,10 +16,10 @@
   --color-danger: #dc2626;          /* NO REGAR */
   --color-danger-bg: #fef2f2;
   --color-danger-border: #fecaca;
-  --color-success: #16a34a;         /* SÍ REGAR */
+  --color-success: #16a34a;         /* REGAR */
   --color-success-bg: #f0fdf4;
   --color-success-border: #bbf7d0;
-  --color-warning: #d97706;         /* ESPERAR / DUDOSO */
+  --color-warning: #d97706;
   --color-warning-bg: #fffbeb;
   --color-warning-border: #fde68a;
   --color-info-bg: #f0f9ff;
@@ -92,12 +92,12 @@ body {
 
 .header-badge {
   font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-muted);
-  background: var(--color-surface-alt);
+  font-weight: 700;
+  color: var(--color-primary);
+  background: var(--color-primary-light);
   padding: 4px 8px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: 1px solid #bbf7d0;
 }
 
 /* Contenedor principal centrado en móvil */
@@ -310,36 +310,34 @@ body {
   color: #92400e;
 }
 
-/* SECCIÓN 2: RECOMENDACIÓN DE RIEGO */
+/* ==========================================================================
+   SECCIÓN 2: ESTADO DEL CLIMA Y DECISIÓN DE RIEGO (M1)
+   ========================================================================== */
+
+/* Banner de veredicto prominente */
 .recommendation-banner {
   border-radius: var(--radius-md);
   padding: 20px 16px;
   text-align: center;
-  border: 2px solid transparent;
+  border: 2.5px solid transparent;
   margin-bottom: 14px;
   transition: all 0.2s ease;
 }
 
 .recommendation-banner.no-regar {
   background-color: var(--color-danger-bg);
-  border-color: var(--color-danger-border);
+  border-color: #f87171;
   color: #991b1b;
 }
 
 .recommendation-banner.si-regar {
   background-color: var(--color-success-bg);
-  border-color: var(--color-success-border);
+  border-color: #4ade80;
   color: #166534;
 }
 
-.recommendation-banner.esperar {
-  background-color: var(--color-warning-bg);
-  border-color: var(--color-warning-border);
-  color: #92400e;
-}
-
 .rec-verdict {
-  font-size: 2rem;
+  font-size: 2.25rem;
   font-weight: 900;
   letter-spacing: -0.02em;
   line-height: 1.1;
@@ -347,34 +345,101 @@ body {
 }
 
 .rec-summary {
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 600;
-  max-width: 480px;
+  max-width: 500px;
   margin: 0 auto;
 }
 
-/* Motivo detallado */
+/* Indicador de regla de negocio */
+.rule-indicator-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background-color: #f8fafc;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  font-size: 0.825rem;
+  color: var(--color-text-muted);
+}
+
+.rule-icon {
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.rule-title {
+  color: var(--color-text-main);
+  display: inline-block;
+  margin-right: 4px;
+}
+
+.rule-desc {
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Motivo y Justificación */
 .motivo-box {
   background: var(--color-surface-alt);
   border-left: 4px solid var(--color-primary);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  padding: 12px 14px;
+  padding: 14px;
   margin-bottom: 16px;
 }
 
+.motivo-box.no-regar {
+  border-left-color: var(--color-danger);
+  background-color: #fffaf0;
+}
+
+.motivo-box.si-regar {
+  border-left-color: var(--color-success);
+  background-color: #f6fef9;
+}
+
 .motivo-label {
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--color-text-muted);
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .motivo-text {
-  font-size: 0.95rem;
+  font-size: 0.96rem;
   color: var(--color-text-main);
-  line-height: 1.45;
+  line-height: 1.5;
+}
+
+/* Encabezado del estado meteorológico */
+.weather-summary-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.weather-section-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-text-main);
+}
+
+.weather-cond-badge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-main);
+  background: var(--color-surface-alt);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
 }
 
 /* Grilla de datos climáticos */
@@ -387,10 +452,22 @@ body {
 
 .metric-item {
   background: var(--color-surface-alt);
-  padding: 10px 12px;
+  padding: 12px;
   border-radius: var(--radius-sm);
   display: flex;
   flex-direction: column;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+
+.metric-item.metric-triggered {
+  border-color: #fca5a5;
+  background-color: #fff5f5;
+}
+
+.metric-item.metric-safe {
+  border-color: #bbf7d0;
+  background-color: #f0fdf4;
 }
 
 .metric-title {
@@ -400,15 +477,24 @@ body {
 }
 
 .metric-value {
-  font-size: 1.15rem;
-  font-weight: 700;
+  font-size: 1.35rem;
+  font-weight: 800;
   color: var(--color-text-main);
-  margin-top: 2px;
+  margin: 2px 0;
 }
 
 .metric-sub {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--color-text-muted);
+}
+
+.metric-sub.tag-danger {
+  color: #b91c1c;
+}
+
+.metric-sub.tag-safe {
+  color: #15803d;
 }
 
 /* Registro de acción rápida */
@@ -436,7 +522,9 @@ body {
   flex: 1;
 }
 
-/* SECCIÓN 3: HISTORIAL DE DECISIONES */
+/* ==========================================================================
+   SECCIÓN 3: HISTORIAL DE DECISIONES
+   ========================================================================== */
 .history-header {
   display: flex;
   align-items: center;
@@ -486,7 +574,7 @@ body {
 .history-badge {
   font-size: 0.75rem;
   font-weight: 800;
-  padding: 2px 8px;
+  padding: 3px 8px;
   border-radius: 4px;
 }
 
@@ -573,6 +661,6 @@ body {
     flex-direction: column;
   }
   .rec-verdict {
-    font-size: 1.7rem;
+    font-size: 1.8rem;
   }
 }

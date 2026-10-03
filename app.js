@@ -1,27 +1,31 @@
 /**
  * ============================================================================
  * RIEGO INTELIGENTE - EL SALVADOR
- * Aplicación de apoyo a la toma de decisiones para pequeños agricultores
- * y huertas escolares salvadoreñas.
+ * Módulo de Decisión de Negocio y Consulta de Clima (M1)
  * 
- * Código en JavaScript Vanilla (Sin dependencias ni librerías externas)
+ * Regla de Decisión (M1):
+ * - Si probabilidad de lluvia > 50% o precipitación prevista > 2 mm:
+ *   Recomendar "NO REGAR" con justificación agronómica detallada.
+ * - De lo contrario:
+ *   Recomendar "REGAR".
+ * 
+ * Código en JavaScript Vanilla (Sin librerías externas)
  * ============================================================================
  */
 
-// Objeto global de la aplicación
 const App = {
-  // Configuración y estado
+  // Estado de la aplicación
   state: {
     selectedMunicipio: null,
     weatherData: null,
     lastRecommendation: null,
-    apiProvider: 'openmeteo', // 'openmeteo' (por defecto sin clave) o 'openweathermap'
+    apiProvider: 'openmeteo', // 'openmeteo' (recomendado) o 'openweathermap'
     owmApiKey: localStorage.getItem('riego_owm_key') || '',
   },
 
   // ==========================================================================
   // CATÁLOGO LOCAL DE MUNICIPIOS DE EL SALVADOR
-  // Con coordenadas oficiales (Latitud y Longitud)
+  // Coordenadas oficiales de los 14 departamentos salvadoreños
   // ==========================================================================
   MUNICIPIOS_EL_SALVADOR: [
     // San Salvador
@@ -95,11 +99,7 @@ const App = {
     { id: 'lu_norte', nombre: 'La Unión Norte (Santa Rosa de Lima, Anamorós, Bolívar, Concepción de Oriente, El Sauce, Lislique, Nueva Esparta, Pasaquina, Polorós, San José)', depto: 'La Unión', lat: 13.6247, lon: -87.8936 }
   ],
 
-  // ==========================================================================
-  // PUNTO CRÍTICO DE ERROR 1: Validación geográfica de El Salvador
-  // Evita enviar coordenadas fuera de la República de El Salvador o datos corruptos
-  // Límites geográficos: Latitud [13.15, 14.45], Longitud [-90.15, -87.68]
-  // ==========================================================================
+  // Validación de límites geográficos de El Salvador
   validarUbicacionElSalvador: function(lat, lon) {
     if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon)) {
       return { valido: false, error: 'Las coordenadas no son números válidos.' };
@@ -114,23 +114,21 @@ const App = {
     if (!dentroDeLimites) {
       return {
         valido: false,
-        error: `Las coordenadas (${lat.toFixed(4)}, ${lon.toFixed(4)}) se encuentran fuera del territorio nacional de El Salvador.`
+        error: `Las coordenadas (${lat.toFixed(4)}, ${lon.toFixed(4)}) están fuera del territorio nacional de El Salvador.`
       };
     }
 
     return { valido: true };
   },
 
-  // ==========================================================================
   // Inicialización de la aplicación
-  // ==========================================================================
   init: function() {
     this.poblarSelectorMunicipios();
     this.vincularEventos();
     this.cargarHistorial();
     this.actualizarEstadoUIConfig();
 
-    // Seleccionar automáticamente el primer municipio para facilidad del agricultor
+    // Seleccionar por defecto el primer municipio
     const select = document.getElementById('select-municipio');
     if (select && select.options.length > 1) {
       select.selectedIndex = 1;
@@ -138,14 +136,12 @@ const App = {
     }
   },
 
-  // Poblar el elemento <select> agrupando por departamentos
   poblarSelectorMunicipios: function() {
     const select = document.getElementById('select-municipio');
     if (!select) return;
 
     select.innerHTML = '<option value="">-- Seleccione su municipio o zona --</option>';
 
-    // Agrupar por departamento
     const porDepto = {};
     this.MUNICIPIOS_EL_SALVADOR.forEach(m => {
       if (!porDepto[m.depto]) {
@@ -154,7 +150,6 @@ const App = {
       porDepto[m.depto].push(m);
     });
 
-    // Crear optgroups para máxima facilidad de búsqueda en celular
     Object.keys(porDepto).sort().forEach(depto => {
       const optgroup = document.createElement('optgroup');
       optgroup.label = `Departamento: ${depto}`;
@@ -170,21 +165,17 @@ const App = {
     });
   },
 
-  // Vincular eventos del DOM
   vincularEventos: function() {
-    // Cambio en selector de municipio
     const select = document.getElementById('select-municipio');
     if (select) {
       select.addEventListener('change', () => this.onMunicipioChange());
     }
 
-    // Botón principal de consultar
     const btnConsultar = document.getElementById('btn-consultar');
     if (btnConsultar) {
       btnConsultar.addEventListener('click', () => this.consultarPronostico());
     }
 
-    // Toggle de configuración de API
     const toggleConfig = document.getElementById('toggle-config');
     const panelConfig = document.getElementById('api-config-panel');
     if (toggleConfig && panelConfig) {
@@ -193,7 +184,6 @@ const App = {
       });
     }
 
-    // Cambio de proveedor de API (Open-Meteo vs OpenWeatherMap)
     const selectProvider = document.getElementById('select-provider');
     if (selectProvider) {
       selectProvider.addEventListener('change', (e) => {
@@ -202,7 +192,6 @@ const App = {
       });
     }
 
-    // Guardado de API key de OpenWeatherMap
     const btnSaveKey = document.getElementById('btn-guardar-key');
     const inputKey = document.getElementById('input-owm-key');
     if (btnSaveKey && inputKey) {
@@ -211,24 +200,22 @@ const App = {
         this.state.owmApiKey = key;
         try {
           localStorage.setItem('riego_owm_key', key);
-          this.mostrarMensaje('Clave de OpenWeatherMap guardada localmente.', 'info');
+          this.mostrarMensaje('Clave de OpenWeatherMap guardada en el navegador.', 'info');
         } catch (e) {
           console.warn('No se pudo guardar la clave en localStorage', e);
         }
       });
     }
 
-    // Botones de acción del historial rápido
     const btnLogNo = document.getElementById('btn-log-no');
     const btnLogSi = document.getElementById('btn-log-si');
     if (btnLogNo) {
-      btnLogNo.addEventListener('click', () => this.guardarDecision('NO regué (seguí el pronóstico)'));
+      btnLogNo.addEventListener('click', () => this.guardarDecision('Decidí NO regar'));
     }
     if (btnLogSi) {
-      btnLogSi.addEventListener('click', () => this.guardarDecision('SÍ regué'));
+      btnLogSi.addEventListener('click', () => this.guardarDecision('Decidí REGAR'));
     }
 
-    // Botón limpiar historial
     const btnLimpiarHistorial = document.getElementById('btn-limpiar-historial');
     if (btnLimpiarHistorial) {
       btnLimpiarHistorial.addEventListener('click', () => this.limpiarHistorial());
@@ -241,7 +228,6 @@ const App = {
     const municipio = this.MUNICIPIOS_EL_SALVADOR.find(m => m.id === id);
     this.state.selectedMunicipio = municipio || null;
 
-    // Actualizar indicador de coordenadas
     const coordsEl = document.getElementById('municipio-coords');
     if (coordsEl) {
       if (municipio) {
@@ -269,7 +255,7 @@ const App = {
   },
 
   // ==========================================================================
-  // FUNCIÓN PRINCIPAL: CONSULTAR PRONÓSTICO
+  // FUNCIÓN PRINCIPAL: CONSULTAR PRONÓSTICO Y EVALUAR RIEGO
   // ==========================================================================
   consultarPronostico: async function() {
     if (!this.state.selectedMunicipio) {
@@ -293,30 +279,29 @@ const App = {
       let datosClima = null;
 
       if (this.state.apiProvider === 'openweathermap') {
-        // Consultar OpenWeatherMap
         datosClima = await this.fetchOpenWeatherMap(lat, lon, nombre);
       } else {
-        // Consultar Open-Meteo (pública, sin clave)
+        // Por defecto: Consulta oficial a Open-Meteo
         datosClima = await this.fetchOpenMeteo(lat, lon, nombre);
       }
 
       this.state.weatherData = datosClima;
+
+      // Ejecutar la regla de decisión M1
       this.procesarRecomendacionRiego(datosClima);
 
     } catch (error) {
-      // Manejo de errores amigable y constructivo
       console.error('Error al consultar pronóstico:', error);
 
-      // Si falló OpenWeatherMap por falta de clave o 401, ofrecer fallback inmediato
       if (this.state.apiProvider === 'openweathermap') {
         this.mostrarMensaje(
-          `Error en OpenWeatherMap: ${error.message}. ¿Deseas consultar con la API pública de Open-Meteo sin clave?`,
+          `Error en OpenWeatherMap: ${error.message}. Puedes usar la API pública Open-Meteo sin clave.`,
           'danger'
         );
         this.crearBotonFallbackOpenMeteo();
       } else {
         this.mostrarMensaje(
-          `No se pudo obtener el pronóstico del clima: ${error.message}. Verifica tu conexión a internet e intenta nuevamente.`,
+          `No se pudo obtener el pronóstico de Open-Meteo: ${error.message}. Verifica tu conexión a internet e intenta nuevamente.`,
           'danger'
         );
       }
@@ -326,247 +311,227 @@ const App = {
   },
 
   // ==========================================================================
-  // PUNTO CRÍTICO DE ERROR 2: Consulta y manejo de OpenWeatherMap
-  // Errores frecuentes:
-  // - Falta de API key o key inválida (HTTP 401)
-  // - Límite de peticiones excedido (HTTP 429)
-  // - Formato de datos no esperado o fallos de red
-  // ==========================================================================
-  fetchOpenWeatherMap: async function(lat, lon, nombre) {
-    const key = this.state.owmApiKey.trim();
-
-    if (!key) {
-      throw new Error('No has ingresado una API Key de OpenWeatherMap. Puedes colocarla en "Configuración de Proveedor de Clima" o usar Open-Meteo.');
-    }
-
-    // Usamos el endpoint 5 Day / 3 Hour Forecast para obtener lluvia horaria
-    const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&lang=es&appid=${encodeURIComponent(key)}`;
-
-    let response;
-    try {
-      response = await fetch(url);
-    } catch (netError) {
-      throw new Error('Fallo de conexión al contactar a OpenWeatherMap. Comprueba tu conexión.');
-    }
-
-    /* PUNTO CRÍTICO DE ERROR 3: Validación del estado HTTP antes de procesar JSON */
-    if (!response.ok) {
-      if (response.status === 401) {
-        throw new Error('Clave de API de OpenWeatherMap inválida o no activada aún (puede tardar un par de horas tras registrarse).');
-      } else if (response.status === 429) {
-        throw new Error('Límite de peticiones gratuitas alcanzado en OpenWeatherMap.');
-      } else {
-        throw new Error(`Error en el servidor de OpenWeatherMap (Código ${response.status}).`);
-      }
-    }
-
-    const json = await response.json();
-    if (!json || !json.list || !Array.isArray(json.list)) {
-      throw new Error('La respuesta de OpenWeatherMap no contiene el formato esperado.');
-    }
-
-    return this.normalizarDatosOpenWeatherMap(json, nombre);
-  },
-
-  // Normalización de respuesta OpenWeatherMap a un formato común
-  normalizarDatosOpenWeatherMap: function(json, nombre) {
-    const list = json.list;
-    // Tomamos las próximas 8 lecturas de 3h (próximas 24 horas)
-    const proximasLecturas = list.slice(0, 8);
-
-    let maxProbabilidadLluvia = 0;
-    let lluviaAcumuladaMm = 0;
-    let probLluviaTarde = 0;
-    let lluviaMmTarde = 0;
-
-    proximasLecturas.forEach(item => {
-      // pop = probability of precipitation (0 a 1)
-      const popPercent = Math.round((item.pop || 0) * 100);
-      if (popPercent > maxProbabilidadLluvia) {
-        maxProbabilidadLluvia = popPercent;
-      }
-
-      // Lluvia en mm en el bloque de 3h
-      const rainVol = (item.rain && item.rain['3h']) ? item.rain['3h'] : 0;
-      lluviaAcumuladaMm += rainVol;
-
-      // Evaluar si cae en la tarde (12:00 a 18:00 hora de El Salvador)
-      // dt_txt tiene formato: "YYYY-MM-DD HH:mm:ss" UTC
-      const fecha = new Date(item.dt * 1000);
-      const horaLocal = fecha.getHours(); // en zona horaria local
-
-      if (horaLocal >= 12 && horaLocal <= 18) {
-        if (popPercent > probLluviaTarde) probLluviaTarde = popPercent;
-        lluviaMmTarde += rainVol;
-      }
-    });
-
-    const primeraLectura = list[0] || {};
-    const tempActual = primeraLectura.main ? primeraLectura.main.temp : 25;
-    const humedad = primeraLectura.main ? primeraLectura.main.humidity : 60;
-    const condicion = (primeraLectura.weather && primeraLectura.weather[0]) ? primeraLectura.weather[0].description : 'Parcialmente nublado';
-
-    return {
-      fuente: 'OpenWeatherMap',
-      municipio: nombre,
-      tempActual: Math.round(tempActual),
-      humedad: humedad,
-      condicion: condicion.charAt(0).toUpperCase() + condicion.slice(1),
-      probLluviaMax: Math.max(maxProbabilidadLluvia, probLluviaTarde),
-      probLluviaTarde: probLluviaTarde || maxProbabilidadLluvia,
-      lluviaMmAcumulada: parseFloat(lluviaAcumuladaMm.toFixed(1)),
-      lluviaMmTarde: parseFloat(lluviaMmTarde.toFixed(1)),
-    };
-  },
-
-  // ==========================================================================
-  // CONSULTA A OPEN-METEO (API Pública gratuita, sin necesidad de clave)
-  // Utiliza el modelo meteorológico de alta resolución para Centroamérica
+  // TAREA 1: CONSULTA PRECISA A OPEN-METEO
+  // Obtiene correctamente la temperatura, la probabilidad de lluvia y la
+  // precipitación del día actual para el municipio seleccionado.
   // ==========================================================================
   fetchOpenMeteo: async function(lat, lon, nombre) {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code&hourly=precipitation_probability,precipitation&daily=precipitation_probability_max,precipitation_sum,temperature_2m_max&timezone=America%2FEl_Salvador&forecast_days=2`;
+    // Parámetros solicitados:
+    // current: temperatura actual, humedad, código de clima
+    // daily: probabilidad máxima de lluvia del día actual, suma de precipitación en mm, min/max temp
+    // hourly: respaldo horario para asegurar precisión en caso de retraso en daily
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,precipitation&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum&hourly=temperature_2m,precipitation_probability,precipitation,weather_code&timezone=America%2FEl_Salvador&forecast_days=1`;
 
     let response;
     try {
       response = await fetch(url);
     } catch (e) {
-      throw new Error('Fallo de red al conectar con Open-Meteo.');
+      throw new Error('Fallo de red al conectar con Open-Meteo. Revisa tu conexión.');
     }
 
     if (!response.ok) {
-      throw new Error(`Open-Meteo devolvió un estado HTTP ${response.status}.`);
+      throw new Error(`Open-Meteo respondió con error HTTP ${response.status}.`);
     }
 
     const data = await response.json();
     return this.normalizarDatosOpenMeteo(data, nombre);
   },
 
-  // Normalización de respuesta Open-Meteo
   normalizarDatosOpenMeteo: function(data, nombre) {
     const current = data.current || {};
-    const hourly = data.hourly || {};
     const daily = data.daily || {};
+    const hourly = data.hourly || {};
 
-    // Obtener la hora actual de El Salvador
-    const ahora = new Date();
-    const horaActual = ahora.getHours();
-
-    // Extraer horas de la tarde de hoy (de 12:00 a 18:00)
-    let probTardeMax = 0;
-    let lluviaTardeSum = 0;
-    let prob24hMax = 0;
-    let lluvia24hSum = 0;
-
-    if (hourly.time && hourly.precipitation_probability) {
-      for (let i = 0; i < Math.min(hourly.time.length, 24); i++) {
-        const timeStr = hourly.time[i]; // formato "YYYY-MM-DDTHH:00"
-        const hora = parseInt(timeStr.substring(11, 13), 10);
-        const prob = hourly.precipitation_probability[i] || 0;
-        const mm = (hourly.precipitation && hourly.precipitation[i]) ? hourly.precipitation[i] : 0;
-
-        if (prob > prob24hMax) prob24hMax = prob;
-        lluvia24hSum += mm;
-
-        if (hora >= 12 && hora <= 18) {
-          if (prob > probTardeMax) probTardeMax = prob;
-          lluviaTardeSum += mm;
-        }
-      }
+    // 1. Temperatura actual del día (°C)
+    let tempActual = 25;
+    if (typeof current.temperature_2m === 'number') {
+      tempActual = Math.round(current.temperature_2m);
+    } else if (hourly.temperature_2m && hourly.temperature_2m.length > 0) {
+      const hora = new Date().getHours();
+      tempActual = Math.round(hourly.temperature_2m[hora] || hourly.temperature_2m[0]);
     }
 
-    const dailyProb = (daily.precipitation_probability_max && daily.precipitation_probability_max[0]) || prob24hMax;
-    const dailySum = (daily.precipitation_sum && daily.precipitation_sum[0]) || lluvia24hSum;
+    // 2. Probabilidad de lluvia del día actual (%)
+    let probLluvia = 0;
+    if (daily.precipitation_probability_max && Array.isArray(daily.precipitation_probability_max) && daily.precipitation_probability_max[0] !== null && daily.precipitation_probability_max[0] !== undefined) {
+      probLluvia = Math.round(daily.precipitation_probability_max[0]);
+    } else if (hourly.precipitation_probability && Array.isArray(hourly.precipitation_probability)) {
+      // Máximo de las 24 horas de hoy
+      const horasHoy = hourly.precipitation_probability.slice(0, 24);
+      probLluvia = Math.round(Math.max(...horasHoy, 0));
+    }
+
+    // 3. Precipitación prevista del día actual en mm
+    let precipitacionMm = 0;
+    if (daily.precipitation_sum && Array.isArray(daily.precipitation_sum) && daily.precipitation_sum[0] !== null && daily.precipitation_sum[0] !== undefined) {
+      precipitacionMm = parseFloat(daily.precipitation_sum[0].toFixed(1));
+    } else if (hourly.precipitation && Array.isArray(hourly.precipitation)) {
+      // Sumatoria de las 24 horas de hoy
+      const horasHoy = hourly.precipitation.slice(0, 24);
+      const total = horasHoy.reduce((acc, val) => acc + (Number(val) || 0), 0);
+      precipitacionMm = parseFloat(total.toFixed(1));
+    }
+
+    // Datos complementarios
+    const humedad = (typeof current.relative_humidity_2m === 'number') ? Math.round(current.relative_humidity_2m) : 65;
+    const condicion = this.interpretarCodigoClimaWMO(current.weather_code);
+    const tempMax = (daily.temperature_2m_max && daily.temperature_2m_max[0] !== undefined) ? Math.round(daily.temperature_2m_max[0]) : null;
+    const tempMin = (daily.temperature_2m_min && daily.temperature_2m_min[0] !== undefined) ? Math.round(daily.temperature_2m_min[0]) : null;
 
     return {
       fuente: 'Open-Meteo',
       municipio: nombre,
-      tempActual: Math.round(current.temperature_2m ?? 26),
-      humedad: Math.round(current.relative_humidity_2m ?? 65),
-      condicion: this.interpretarCodigoClimaWMO(current.weather_code),
-      probLluviaMax: dailyProb,
-      probLluviaTarde: probTardeMax || dailyProb,
-      lluviaMmAcumulada: parseFloat(dailySum.toFixed(1)),
-      lluviaMmTarde: parseFloat(lluviaTardeSum.toFixed(1))
+      tempActual: tempActual,
+      tempMax: tempMax,
+      tempMin: tempMin,
+      humedad: humedad,
+      condicion: condicion,
+      probLluvia: probLluvia,
+      precipitacionMm: precipitacionMm
     };
   },
 
-  // Traductor de códigos meteorológicos WMO
+  // Consulta de compatibilidad con OpenWeatherMap
+  fetchOpenWeatherMap: async function(lat, lon, nombre) {
+    const key = this.state.owmApiKey.trim();
+    if (!key) {
+      throw new Error('No has ingresado una API Key de OpenWeatherMap. Puedes ingresar tu clave o usar Open-Meteo.');
+    }
+
+    const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&lang=es&appid=${encodeURIComponent(key)}`;
+
+    let response;
+    try {
+      response = await fetch(url);
+    } catch (e) {
+      throw new Error('Fallo de red al contactar con OpenWeatherMap.');
+    }
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Clave de API de OpenWeatherMap no válida o aún en proceso de activación.');
+      }
+      throw new Error(`OpenWeatherMap devolvió código HTTP ${response.status}.`);
+    }
+
+    const json = await response.json();
+    return this.normalizarDatosOpenWeatherMap(json, nombre);
+  },
+
+  normalizarDatosOpenWeatherMap: function(json, nombre) {
+    const list = json.list || [];
+    const lecturasHoy = list.slice(0, 8); // Próximas 24 horas (bloques de 3h)
+
+    let maxProb = 0;
+    let sumaMm = 0;
+
+    lecturasHoy.forEach(item => {
+      const prob = Math.round((item.pop || 0) * 100);
+      if (prob > maxProb) maxProb = prob;
+      const mm = (item.rain && item.rain['3h']) ? item.rain['3h'] : 0;
+      sumaMm += mm;
+    });
+
+    const primera = list[0] || {};
+    const tempActual = primera.main ? Math.round(primera.main.temp) : 26;
+    const humedad = primera.main ? Math.round(primera.main.humidity) : 60;
+    const condicionTxt = (primera.weather && primera.weather[0]) ? primera.weather[0].description : 'Parcialmente nublado';
+
+    return {
+      fuente: 'OpenWeatherMap',
+      municipio: nombre,
+      tempActual: tempActual,
+      tempMax: null,
+      tempMin: null,
+      humedad: humedad,
+      condicion: condicionTxt.charAt(0).toUpperCase() + condicionTxt.slice(1),
+      probLluvia: maxProb,
+      precipitacionMm: parseFloat(sumaMm.toFixed(1))
+    };
+  },
+
   interpretarCodigoClimaWMO: function(code) {
-    if (code === 0) return 'Cielo despejado';
-    if (code === 1) return 'Principalmente despejado';
-    if (code === 2) return 'Parcialmente nublado';
-    if (code === 3) return 'Nublado';
-    if (code >= 51 && code <= 55) return 'Llovizna ligera';
-    if (code >= 61 && code <= 65) return 'Lluvia constante';
-    if (code >= 80 && code <= 82) return 'Chubascos aislados';
-    if (code >= 95) return 'Tormenta eléctrica';
-    return 'Cielo variable';
+    if (code === 0) return '☀️ Cielo despejado';
+    if (code === 1) return '🌤️ Principalmente despejado';
+    if (code === 2) return '⛅ Parcialmente nublado';
+    if (code === 3) return '☁️ Nublado';
+    if (code >= 45 && code <= 48) return '🌫️ Neblina';
+    if (code >= 51 && code <= 55) return '🌦️ Llovizna ligera';
+    if (code >= 61 && code <= 65) return '🌧️ Lluvia moderada o constante';
+    if (code >= 80 && code <= 82) return '🌧️ Chubascos intensos';
+    if (code >= 95) return '⛈️ Tormenta eléctrica';
+    return '⛅ Cielo variable';
   },
 
   // ==========================================================================
-  // PUNTO CRÍTICO DE ERROR 5: MOTOR DE RECOMENDACIÓN AGRÍCOLA
-  // Resuelve el problema: "Se riega el cultivo aunque vaya a llover en la tarde"
-  // Reglas agronómicas para huerta pequeña / cultivo escolar:
-  // - Si hay >= 40% de lluvia en la tarde o acumulación >= 2.0 mm: NO REGAR.
-  //   Motivo: Evita lavado de fertilizantes/compost, asfixia radicular y hongos (Phytophthora/tizón).
-  // - Si probabilidad es 20-39%: ESPERAR / RIEGO MODERADO.
-  // - Si probabilidad < 20%: SÍ REGAR (preferiblemente mañana o tarde fresca).
+  // TAREA 2: REGLA CLARA DE DECISIÓN (M1)
+  // - Si probabilidad de lluvia > 50% O precipitación prevista > 2mm:
+  //   Recomendar "NO REGAR" con justificación agronómica.
+  // - En caso contrario:
+  //   Recomendar "REGAR".
   // ==========================================================================
   procesarRecomendacionRiego: function(clima) {
-    const probTarde = clima.probLluviaTarde;
-    const lluviaTardeMm = clima.lluviaMmTarde;
-    const probMax = clima.probLluviaMax;
-    const lluviaTotal = clima.lluviaMmAcumulada;
+    const probLluvia = clima.probLluvia;
+    const precipitacionMm = clima.precipitacionMm;
+    const tempActual = clima.tempActual;
 
-    let veredicto = 'NO';
-    let claseCss = 'no-regar';
-    let tituloVeredicto = '🛑 NO REGAR';
+    // REGLA DE NEGOCIO M1:
+    const cumpleReglaNoRegar = (probLluvia > 50) || (precipitacionMm > 2);
+
+    let veredicto = '';
+    let tituloVeredicto = '';
+    let claseCss = '';
     let resumen = '';
-    let motivo = '';
+    let justificacion = '';
 
-    if (probTarde >= 40 || lluviaTardeMm >= 1.5 || probMax >= 55 || lluviaTotal >= 3.0) {
-      // CASO: VA A LLOVER EN LA TARDE / NOCHE
-      veredicto = 'NO';
-      claseCss = 'no-regar';
+    if (cumpleReglaNoRegar) {
+      veredicto = 'NO REGAR';
       tituloVeredicto = '🛑 NO REGAR';
-      resumen = 'Se pronostican lluvias significativas para esta tarde o noche.';
-      motivo = `El pronóstico indica un ${probTarde}% de probabilidad de lluvia en horas de la tarde con una acumulación estimada de ${lluviaTotal} mm. Regar la huerta ahora provocaría encharcamiento del suelo, desperdicio innecesario de agua y riesgo de asfixia en las raíces o proliferación de hongos en el cultivo. La lluvia natural se encargará del riego.`;
-    } else if (probTarde >= 25 || probMax >= 35) {
-      // CASO DUDOSO: PROBABILIDAD MODERADA
-      veredicto = 'ESPERAR';
-      claseCss = 'esperar';
-      tituloVeredicto = '⚠️ ESPERAR / RIEGO MÍNIMO';
-      resumen = 'Probabilidad moderada de chubascos o lluvia dispersa.';
-      motivo = `Existe una probabilidad de lluvia moderada (${probTarde}%) y nubosidad en la tarde. Si la tierra aún conserva humedad al tacto (a 3 cm de profundidad), NO riegues y espera a que caiga la tarde. Si el suelo está completamente seco y arenoso, aplica únicamente un riego ligero cerca del tallo.`;
+      claseCss = 'no-regar';
+      resumen = 'No se recomienda regar hoy. La lluvia esperada aportará la humedad necesaria a la parcela.';
+
+      // Justificación agronómica según qué condición o condiciones activaron la regla
+      if (probLluvia > 50 && precipitacionMm > 2) {
+        justificacion = `Se recomienda NO REGAR el cultivo. La probabilidad de lluvia para hoy es del ${probLluvia}% (supera el umbral del 50%) y la precipitación prevista es de ${precipitacionMm} mm (supera el umbral de 2 mm). Regar en estas condiciones saturaría el suelo, desperdiciaría agua y aumentaría el riesgo de asfixia radicular y enfermedades fungosas. El aporte pluvial será suficiente para la huerta.`;
+      } else if (probLluvia > 50) {
+        justificacion = `Se recomienda NO REGAR el cultivo. La probabilidad de lluvia para hoy es del ${probLluvia}% (supera el umbral del 50%), con una precipitación prevista de ${precipitacionMm} mm. El riesgo de lluvia es elevado; regar ahora provocaría exceso de humedad en el suelo y lavado de fertilizantes si cae la precipitación esperada.`;
+      } else {
+        justificacion = `Se recomienda NO REGAR el cultivo. Aunque la probabilidad de lluvia es del ${probLluvia}%, el volumen de precipitación previsto es de ${precipitacionMm} mm (supera el umbral de 2 mm). Este volumen de agua natural es suficiente para hidratar el suelo de la parcela sin necesidad de riego suplementario.`;
+      }
+
     } else {
-      // CASO SECO: NO VA A LLOVER
-      veredicto = 'SÍ';
+      veredicto = 'REGAR';
+      tituloVeredicto = '💧 REGAR';
       claseCss = 'si-regar';
-      tituloVeredicto = '💧 SÍ REGAR';
-      resumen = 'Condiciones secas. No se espera lluvia para hoy en la tarde.';
-      motivo = `La probabilidad de lluvia en la tarde es muy baja (${probTarde}%, con menos de 1 mm esperado) y la temperatura alcanzará los ${clima.tempActual}°C. Las hortalizas y cultivos necesitan hidratación. Se recomienda regar temprano en la mañana (antes de las 8:00 AM) o al caer el sol para evitar pérdidas por evaporación.`;
+      resumen = 'Se recomienda regar hoy. Las precipitaciones previstas no cubrirán las necesidades hídricas del cultivo.';
+
+      justificacion = `Se recomienda REGAR el cultivo. La probabilidad de lluvia para hoy es de solo ${probLluvia}% (no supera el 50%) y la precipitación estimada es de ${precipitacionMm} mm (no supera los 2 mm), con una temperatura actual de ${tempActual}°C. Las condiciones atmosféricas indican que la huerta no recibirá agua natural suficiente. Se aconseja regar temprano en la mañana o al atardecer para evitar pérdidas por evaporación solar.`;
     }
 
     this.state.lastRecommendation = {
       municipio: clima.municipio,
       veredicto: veredicto,
-      probLluvia: probTarde,
-      lluviaMm: lluviaTotal,
-      temp: clima.tempActual,
-      motivo: motivo,
+      probLluvia: probLluvia,
+      precipitacionMm: precipitacionMm,
+      temp: tempActual,
+      justificacion: justificacion,
       fecha: new Date().toISOString()
     };
 
-    // Renderizar resultados en pantalla
-    this.renderizarRecomendacion(tituloVeredicto, resumen, motivo, claseCss, clima);
+    // Tarea 3: Mostrar claramente el estado y la sugerencia en la interfaz
+    this.renderizarRecomendacion(tituloVeredicto, resumen, justificacion, claseCss, clima, cumpleReglaNoRegar);
   },
 
-  renderizarRecomendacion: function(titulo, resumen, motivo, claseCss, clima) {
+  // ==========================================================================
+  // TAREA 3: MOSTRAR CLARAMENTE EL ESTADO DEL CLIMA Y LA SUGERENCIA FINAL
+  // ==========================================================================
+  renderizarRecomendacion: function(titulo, resumen, justificacion, claseCss, clima, esNoRegar) {
     const cardEl = document.getElementById('card-recomendacion');
     if (!cardEl) return;
 
     cardEl.style.display = 'block';
 
+    // 1. Sugerencia final en el banner
     const bannerEl = document.getElementById('recommendation-banner');
     if (bannerEl) {
       bannerEl.className = `recommendation-banner ${claseCss}`;
@@ -576,34 +541,79 @@ const App = {
       `;
     }
 
+    // 2. Justificación correspondiente
     const motivoEl = document.getElementById('rec-motivo-text');
+    const motivoBox = document.querySelector('.motivo-box');
     if (motivoEl) {
-      motivoEl.textContent = motivo;
+      motivoEl.textContent = justificacion;
+    }
+    if (motivoBox) {
+      motivoBox.className = `motivo-box ${claseCss}`;
     }
 
-    // Métricas del clima
+    // 3. Encabezado del estado actual del clima
+    const elMunicipio = document.getElementById('val-municipio-nombre');
+    const elCondicion = document.getElementById('val-condicion-badge');
+    if (elMunicipio) elMunicipio.textContent = clima.municipio;
+    if (elCondicion) elCondicion.textContent = clima.condicion;
+
+    // 4. Métricas climáticas con resaltado visual del umbral de decisión
     const valProb = document.getElementById('val-prob-lluvia');
-    const valLluvia = document.getElementById('val-lluvia-mm');
+    const valProbTag = document.getElementById('val-prob-tag');
+    const cardProb = document.getElementById('metric-prob-card');
+
+    if (valProb) valProb.textContent = `${clima.probLluvia}%`;
+    if (cardProb && valProbTag) {
+      if (clima.probLluvia > 50) {
+        cardProb.className = 'metric-item metric-triggered';
+        valProbTag.textContent = '⚠️ Supera umbral (> 50%)';
+        valProbTag.className = 'metric-sub tag-danger';
+      } else {
+        cardProb.className = 'metric-item metric-safe';
+        valProbTag.textContent = '✓ Dentro del límite (≤ 50%)';
+        valProbTag.className = 'metric-sub tag-safe';
+      }
+    }
+
+    const valPrecip = document.getElementById('val-lluvia-mm');
+    const valPrecipTag = document.getElementById('val-precip-tag');
+    const cardPrecip = document.getElementById('metric-precip-card');
+
+    if (valPrecip) valPrecip.textContent = `${clima.precipitacionMm} mm`;
+    if (cardPrecip && valPrecipTag) {
+      if (clima.precipitacionMm > 2) {
+        cardPrecip.className = 'metric-item metric-triggered';
+        valPrecipTag.textContent = '⚠️ Supera umbral (> 2 mm)';
+        valPrecipTag.className = 'metric-sub tag-danger';
+      } else {
+        cardPrecip.className = 'metric-item metric-safe';
+        valPrecipTag.textContent = '✓ Dentro del límite (≤ 2 mm)';
+        valPrecipTag.className = 'metric-sub tag-safe';
+      }
+    }
+
     const valTemp = document.getElementById('val-temperatura');
+    const valTempMinMax = document.getElementById('val-temp-minmax');
+    if (valTemp) valTemp.textContent = `${clima.tempActual}°C`;
+    if (valTempMinMax) {
+      if (clima.tempMin !== null && clima.tempMax !== null) {
+        valTempMinMax.textContent = `Mín: ${clima.tempMin}°C / Máx: ${clima.tempMax}°C`;
+      } else {
+        valTempMinMax.textContent = 'Sensación térmica estable';
+      }
+    }
+
     const valHumedad = document.getElementById('val-humedad');
     const valFuente = document.getElementById('val-fuente-api');
-
-    if (valProb) valProb.textContent = `${clima.probLluviaTarde}%`;
-    if (valLluvia) valLluvia.textContent = `${clima.lluviaMmAcumulada} mm`;
-    if (valTemp) valTemp.textContent = `${clima.tempActual}°C (${clima.condicion})`;
     if (valHumedad) valHumedad.textContent = `${clima.humedad}%`;
-    if (valFuente) valFuente.textContent = clima.fuente;
+    if (valFuente) valFuente.textContent = `Fuente: ${clima.fuente}`;
 
-    // Desplazar suavemente a la tarjeta de recomendación en móviles
+    // Desplazamiento fluido hacia la sugerencia en dispositivos móviles
     cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   },
 
   // ==========================================================================
-  // PUNTO CRÍTICO DE ERROR 4: PERSISTENCIA Y HISTORIAL CON LOCALSTORAGE
-  // Errores frecuentes:
-  // - Bloqueo de cookies/almacenamiento en modo incógnito
-  // - QuotaExceededError si se guardan demasiados registros
-  // - Corrupción de JSON al deserializar
+  // HISTORIAL DE DECISIONES TOMADAS
   // ==========================================================================
   guardarDecision: function(accionRealizada) {
     if (!this.state.lastRecommendation) {
@@ -621,8 +631,9 @@ const App = {
         minute: '2-digit'
       }),
       municipio: this.state.lastRecommendation.municipio,
-      veredicto: this.state.lastRecommendation.veredicto,
+      veredicto: this.state.lastRecommendation.veredicto, // 'NO REGAR' o 'REGAR'
       probLluvia: this.state.lastRecommendation.probLluvia,
+      precipitacionMm: this.state.lastRecommendation.precipitacionMm,
       temp: this.state.lastRecommendation.temp,
       accion: accionRealizada
     };
@@ -630,7 +641,6 @@ const App = {
     let historial = this.obtenerHistorialStorage();
     historial.unshift(nuevaEntrada);
 
-    // Limitar historial a los últimos 30 registros para no sobrecargar el almacenamiento
     if (historial.length > 30) {
       historial = historial.slice(0, 30);
     }
@@ -638,7 +648,7 @@ const App = {
     try {
       localStorage.setItem('riego_historial_sv', JSON.stringify(historial));
       this.renderizarHistorial(historial);
-      this.mostrarMensaje('✅ Decisión registrada en el historial con éxito.', 'info');
+      this.mostrarMensaje(`✅ Decisión registrada: "${accionRealizada}".`, 'info');
     } catch (e) {
       console.warn('Error al guardar en localStorage:', e);
       this.mostrarMensaje('No se pudo guardar la decisión en el almacenamiento local.', 'warning');
@@ -663,7 +673,7 @@ const App = {
   },
 
   limpiarHistorial: function() {
-    if (!confirm('¿Estás seguro de que deseas vaciar todo el historial de decisiones de riego?')) {
+    if (!confirm('¿Deseas vaciar todo el historial de decisiones de riego?')) {
       return;
     }
     try {
@@ -699,7 +709,7 @@ const App = {
       contenedor.innerHTML = `
         <div class="history-empty">
           <p>🌱 Aún no has registrado ninguna decisión de riego.</p>
-          <p style="margin-top:4px; font-size:0.75rem;">Cuando consultes el clima, presiona "Registrar decisión" para llevar un control del agua en tu cultivo.</p>
+          <p style="margin-top:4px; font-size:0.75rem;">Consulta el clima y pulsa "Decidí NO regar" o "Decidí REGAR" para llevar una bitácora de tu cultivo.</p>
         </div>
       `;
       return;
@@ -707,8 +717,10 @@ const App = {
 
     let html = '<div class="history-list">';
     historial.forEach(item => {
-      const claseBadge = item.veredicto === 'NO' ? 'no' : 'si';
-      const textoVeredicto = item.veredicto === 'NO' ? 'Recomendación: NO REGAR' : (item.veredicto === 'SÍ' ? 'Recomendación: SÍ REGAR' : 'Recomendación: ESPERAR');
+      const esNo = item.veredicto === 'NO REGAR' || item.veredicto === 'NO';
+      const claseBadge = esNo ? 'no' : 'si';
+      const textoVeredicto = esNo ? 'Sugerencia: NO REGAR' : 'Sugerencia: REGAR';
+      const precipText = (item.precipitacionMm !== undefined) ? ` | 💧 ${item.precipitacionMm} mm` : '';
 
       html += `
         <div class="history-item">
@@ -718,14 +730,14 @@ const App = {
           </div>
           <div class="history-meta">
             <span>📅 ${this.escaparHtml(item.fecha)}</span>
-            <span>🌧️ Prob. lluvia: ${item.probLluvia}%</span>
+            <span>🌧️ Prob. lluvia: ${item.probLluvia}%${precipText}</span>
             <span>🌡️ ${item.temp}°C</span>
           </div>
           <div class="history-action-taken">
-            Acción tomada: ${this.escaparHtml(item.accion)}
+            Acción: ${this.escaparHtml(item.accion)}
           </div>
           <div class="history-item-actions">
-            <button class="btn btn-sm btn-danger-outline" onclick="App.eliminarRegistroHistorial('${item.id}')" title="Eliminar este registro">
+            <button class="btn btn-sm btn-danger-outline" onclick="App.eliminarRegistroHistorial('${item.id}')" title="Eliminar registro">
               🗑️ Borrar
             </button>
           </div>
@@ -737,9 +749,7 @@ const App = {
     contenedor.innerHTML = html;
   },
 
-  // ==========================================================================
-  // HELPERS DE UI Y SEGURIDAD
-  // ==========================================================================
+  // Helpers de interfaz
   escaparHtml: function(str) {
     if (!str) return '';
     return String(str)
@@ -782,7 +792,7 @@ const App = {
     }
     if (btn) {
       btn.disabled = mostrar;
-      btn.textContent = mostrar ? '⏳ Consultando pronóstico...' : '🔍 Consultar Pronóstico y Decidir Riego';
+      btn.textContent = mostrar ? '⏳ Consultando clima...' : '🔍 Consultar Clima y Evaluar Riego';
     }
   },
 
@@ -793,7 +803,7 @@ const App = {
     const btnFallback = document.createElement('button');
     btnFallback.className = 'btn btn-secondary btn-sm';
     btnFallback.style.marginTop = '8px';
-    btnFallback.textContent = '🔄 Usar Open-Meteo ahora (Pública y sin clave)';
+    btnFallback.textContent = '🔄 Consultar con Open-Meteo ahora (Pública y sin clave)';
     btnFallback.onclick = () => {
       this.state.apiProvider = 'openmeteo';
       this.actualizarEstadoUIConfig();
@@ -807,12 +817,11 @@ const App = {
   }
 };
 
-// Iniciar cuando el DOM esté listo
+// Iniciar aplicación
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => App.init());
 } else {
   App.init();
 }
 
-// Exportar en window para callbacks de botones en HTML
 window.App = App;

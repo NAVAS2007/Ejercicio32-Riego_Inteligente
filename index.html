@@ -22,7 +22,7 @@
             <p class="brand-subtitle">Huertas y Parcelas de El Salvador 🇸🇻</p>
           </div>
         </div>
-        <span class="header-badge">v1.0 Vanilla</span>
+        <span class="header-badge">M1 Optimizado</span>
       </div>
     </header>
 
@@ -36,11 +36,11 @@
       <section class="card" aria-labelledby="sec1-heading">
         <h2 id="sec1-heading" class="card-title">
           <span class="step-number">1</span>
-          <span>Consultar Pronóstico Municipal</span>
+          <span>Seleccionar Municipio y Consultar Clima</span>
         </h2>
 
         <div class="form-group">
-          <label for="select-municipio" class="form-label">Municipio o Zona de Cultivo:</label>
+          <label for="select-municipio" class="form-label">Municipio o Zona de Cultivo en El Salvador:</label>
           <select id="select-municipio" class="form-select" aria-describedby="municipio-coords">
             <option value="">Cargando municipios salvadoreños...</option>
           </select>
@@ -48,32 +48,32 @@
         </div>
 
         <button id="btn-consultar" class="btn btn-primary" type="button">
-          🔍 Consultar Pronóstico y Decidir Riego
+          🔍 Consultar Clima y Evaluar Riego
         </button>
 
         <!-- Indicador de carga -->
         <div id="loader-wrapper" class="loader-wrapper" role="status" aria-live="polite">
           <div class="spinner"></div>
           <p style="font-size: 0.85rem; color: var(--color-text-muted);">
-            Consultando servicio meteorológico para El Salvador...
+            Consultando servicio meteorológico en tiempo real...
           </p>
         </div>
 
         <!-- Configuración de Proveedor de Clima (Colapsable) -->
         <button id="toggle-config" type="button" class="collapsible-toggle" aria-expanded="false">
-          <span>⚙️ Opciones de API meteorológica (Open-Meteo / OpenWeatherMap)</span>
+          <span>⚙️ Opciones de Servicio Meteorológico (Open-Meteo / OpenWeatherMap)</span>
           <span aria-hidden="true">▾</span>
         </button>
 
         <div id="api-config-panel" class="api-config-panel">
           <div class="form-group">
-            <label for="select-provider" class="form-label">Servicio Meteorológico:</label>
+            <label for="select-provider" class="form-label">Proveedor Meteorológico:</label>
             <select id="select-provider" class="form-select">
-              <option value="openmeteo">Open-Meteo (API Pública gratuita, sin clave requerida)</option>
-              <option value="openweathermap">OpenWeatherMap (Requiere clave API personal)</option>
+              <option value="openmeteo">Open-Meteo (API Pública oficial sin clave, recomendada)</option>
+              <option value="openweathermap">OpenWeatherMap (Requiere clave API appid)</option>
             </select>
             <p class="form-help">
-              Ambos servicios analizan la probabilidad de lluvia para la tarde en El Salvador.
+              Ambos servicios analizan temperatura actual, probabilidad de lluvia y precipitación del día para El Salvador.
             </p>
           </div>
 
@@ -84,71 +84,87 @@
                 type="password" 
                 id="input-owm-key" 
                 class="form-input" 
-                placeholder="Pega aquí tu appid de OpenWeatherMap..." 
+                placeholder="Pega aquí tu appid..." 
                 autocomplete="off"
               />
               <button id="btn-guardar-key" class="btn btn-secondary btn-sm" type="button" style="white-space: nowrap;">
-                Guardar Clave
+                Guardar
               </button>
             </div>
             <p class="form-help">
-              Se guarda en tu navegador (localStorage). Si no tienes clave, selecciona Open-Meteo arriba.
+              Se almacena localmente en tu navegador. Si no tienes una clave activa, utiliza Open-Meteo.
             </p>
           </div>
         </div>
       </section>
 
-      <!-- PASO 2: Recomendación de Riego (SÍ / NO con Motivo) -->
+      <!-- PASO 2: Estado del Clima Actual y Recomendación de Riego -->
       <section id="card-recomendacion" class="card" style="display: none;" aria-labelledby="sec2-heading">
         <h2 id="sec2-heading" class="card-title">
           <span class="step-number">2</span>
-          <span>Recomendación de Riego</span>
+          <span>Estado del Clima y Decisión de Riego</span>
         </h2>
 
-        <!-- Banner de Veredicto (SÍ REGAR o NO REGAR) -->
+        <!-- SUGERENCIA FINAL (BANNER PRINCIPAL) -->
         <div id="recommendation-banner" class="recommendation-banner">
-          <!-- Generado dinámicamente -->
+          <!-- Generado dinámicamente: NO REGAR o REGAR -->
         </div>
 
-        <!-- Motivo agronómico detallado -->
+        <!-- Regla de decisión aplicada visible para transparencia -->
+        <div class="rule-indicator-box">
+          <span class="rule-icon">⚖️</span>
+          <div class="rule-content">
+            <strong class="rule-title">Regla de Decisión (M1):</strong>
+            <p class="rule-desc">
+              Si la probabilidad de lluvia es &gt; 50% o la precipitación prevista es &gt; 2 mm ➔ <strong>NO REGAR</strong>. De lo contrario ➔ <strong>REGAR</strong>.
+            </p>
+          </div>
+        </div>
+
+        <!-- Justificación agronómica correspondiente -->
         <div class="motivo-box">
-          <div class="motivo-label">Motivo basado en el pronóstico:</div>
+          <div class="motivo-label">Justificación basada en el pronóstico:</div>
           <p id="rec-motivo-text" class="motivo-text"></p>
         </div>
 
-        <!-- Métricas meteorológicas clave para el agricultor -->
+        <!-- ESTADO DETALLADO DEL CLIMA ACTUAL -->
+        <div class="weather-summary-header">
+          <span class="weather-section-title">📊 Estado del Clima Hoy en <span id="val-municipio-nombre">--</span></span>
+          <span id="val-condicion-badge" class="weather-cond-badge">--</span>
+        </div>
+
         <div class="weather-metrics-grid">
-          <div class="metric-item">
-            <span class="metric-title">Probabilidad lluvia (Tarde)</span>
+          <div class="metric-item" id="metric-prob-card">
+            <span class="metric-title">Probabilidad de Lluvia</span>
             <span id="val-prob-lluvia" class="metric-value">0%</span>
-            <span class="metric-sub">Entre 12:00 PM y 6:00 PM</span>
+            <span id="val-prob-tag" class="metric-sub">Umbral: 50%</span>
           </div>
-          <div class="metric-item">
-            <span class="metric-title">Lluvia estimada</span>
+          <div class="metric-item" id="metric-precip-card">
+            <span class="metric-title">Precipitación Prevista</span>
             <span id="val-lluvia-mm" class="metric-value">0.0 mm</span>
-            <span class="metric-sub">Acumulación pronosticada</span>
+            <span id="val-precip-tag" class="metric-sub">Umbral: 2 mm</span>
           </div>
           <div class="metric-item">
-            <span class="metric-title">Temperatura ambiental</span>
+            <span class="metric-title">Temperatura Actual</span>
             <span id="val-temperatura" class="metric-value">--°C</span>
-            <span class="metric-sub">Condición del cielo</span>
+            <span id="val-temp-minmax" class="metric-sub">Min / Max del día</span>
           </div>
           <div class="metric-item">
-            <span class="metric-title">Humedad relativa</span>
+            <span class="metric-title">Humedad Relativa</span>
             <span id="val-humedad" class="metric-value">--%</span>
-            <span id="val-fuente-api" class="metric-sub">Fuente API</span>
+            <span id="val-fuente-api" class="metric-sub">Fuente: Open-Meteo</span>
           </div>
         </div>
 
-        <!-- Registro rápido en historial -->
+        <!-- Registro de acción en historial -->
         <div class="log-action-panel">
-          <div class="log-action-title">¿Qué hiciste hoy en tu parcela? (Registrar en Historial):</div>
+          <div class="log-action-title">Registrar decisión tomada en tu huerta/parcela:</div>
           <div class="action-buttons-row">
             <button id="btn-log-no" class="btn btn-secondary btn-sm" type="button">
               🛑 Decidí NO regar
             </button>
             <button id="btn-log-si" class="btn btn-secondary btn-sm" type="button">
-              💧 SÍ regué el cultivo
+              💧 Decidí REGAR
             </button>
           </div>
         </div>
@@ -162,7 +178,7 @@
             <span>Historial de Decisiones (<span id="history-count">0</span>)</span>
           </h2>
           <button id="btn-limpiar-historial" class="btn btn-sm btn-danger-outline" type="button" title="Vaciar historial">
-            Vaciar
+            Vaciar Historial
           </button>
         </div>
 
@@ -175,8 +191,7 @@
 
     <!-- Pie de página -->
     <footer class="app-footer">
-      <p><strong>Riego Inteligente El Salvador</strong></p>
-      <p>Diseñado para evitar el desperdicio de agua y cuidar huertas escolares y cultivos familiares.</p>
+      <p><strong>Riego Inteligente El Salvador</strong> — Cuidado del agua para huertas escolares y cultivos comunitarios.</p>
     </footer>
 
     <!-- Lógica de la aplicación en JavaScript Vanilla -->
