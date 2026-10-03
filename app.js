@@ -1,17 +1,18 @@
 /**
  * ============================================================================
  * RIEGO INTELIGENTE - EL SALVADOR
- * M1 + M2 + M3: Lógica de Decisión, Persistencia Local y Experiencia Móvil
+ * M1 + M2 + M3 + M4: Resiliencia, Manejo de Errores y Validación Estricta
  * 
- * Requisitos M3:
- * 1. 100% Responsive y Mobile-First.
- * 2. Tarjetas claras con alto contraste y botones táctiles grandes (>= 48px).
- * 3. Lista de historial sin desbordes horizontales para pantallas estrechas.
- * 4. Empty State visual amigable con ilustración orientadora.
+ * Requisitos M4:
+ * 1. Validaciones estrictas a las entradas del usuario (municipio obligatorio).
+ * 2. Indicador de carga claro (loading spinner, aria-busy y bloqueo de controles).
+ * 3. Manejo robusto de errores de red, caídas de API y timeout (con AbortController y try/catch).
+ * 4. Garantía de que timeouts o datos incompletos nunca corrompan el localStorage.
  * ============================================================================
  */
 
 const STORAGE_KEY = 'riego_historial_sv';
+const REQUEST_TIMEOUT_MS = 9000; // 9 segundos de timeout para conexiones rurales
 
 const App = {
   // Estado en memoria de la aplicación
@@ -21,6 +22,7 @@ const App = {
     lastRecommendation: null,
     apiProvider: 'openmeteo', // 'openmeteo' (recomendado) o 'openweathermap'
     owmApiKey: localStorage.getItem('riego_owm_key') || '',
+    isFetching: false,
   },
 
   // ==========================================================================
@@ -99,7 +101,7 @@ const App = {
     { id: 'lu_norte', nombre: 'La Unión Norte (Santa Rosa de Lima, Anamorós, Bolívar, Concepción de Oriente, El Sauce, Lislique, Nueva Esparta, Pasaquina, Polorós, San José)', depto: 'La Unión', lat: 13.6247, lon: -87.8936 }
   ],
 
-  // Validación de límites geográficos de El Salvador
+  // Validación geográfica de El Salvador
   validarUbicacionElSalvador: function(lat, lon) {
     if (typeof lat !== 'number' || typeof lon !== 'number' || isNaN(lat) || isNaN(lon)) {
       return { valido: false, error: 'Las coordenadas no son números válidos.' };
@@ -123,7 +125,6 @@ const App = {
 
   // ==========================================================================
   // INICIALIZACIÓN DE LA APLICACIÓN
-  // Carga inmediatamente el historial guardado en localStorage (M2 + M3)
   // ==========================================================================
   init: function() {
     this.poblarSelectorMunicipios();
@@ -131,10 +132,10 @@ const App = {
     this.cargarHistorial();
     this.actualizarEstadoUIConfig();
 
+    // No forzar selección automática para permitir validar si el usuario no ha elegido aún
     const select = document.getElementById('select-municipio');
-    if (select && select.options.length > 1) {
-      select.selectedIndex = 1;
-      this.onMunicipioChange();
+    if (select) {
+      select.value = '';
     }
   },
 
@@ -142,7 +143,7 @@ const App = {
     const select = document.getElementById('select-municipio');
     if (!select) return;
 
-    select.innerHTML = '<option value="">-- Seleccione su municipio o zona --</option>';
+    select.innerHTML = '<option value="">-- Selecciona un municipio salvadoreño --</option>';
 
     const porDepto = {};
     this.MUNICIPIOS_EL_SALVADOR.forEach(m => {
@@ -209,7 +210,7 @@ const App = {
       });
     }
 
-    // Botones táctiles grandes para registrar decisión (M2/M3)
+    // Botones de decisión
     const btnLogNo = document.getElementById('btn-log-no');
     const btnLogSi = document.getElementById('btn-log-si');
     if (btnLogNo) {
@@ -219,16 +220,33 @@ const App = {
       btnLogSi.addEventListener('click', () => this.guardarDecision('REGAR'));
     }
 
-    // Botón para vaciar historial completo
+    // Botón vaciar historial
     const btnLimpiarHistorial = document.getElementById('btn-limpiar-historial');
     if (btnLimpiarHistorial) {
       btnLimpiarHistorial.addEventListener('click', () => this.limpiarHistorial());
     }
+
+    // Monitoreo proactivo del estado de conexión de red (M4)
+    window.addEventListener('offline', () => {
+      this.mostrarMensaje('📡 Se ha perdido la conexión a internet. La aplicación continuará funcionando con el historial local, pero necesitas red para nuevas consultas.', 'warning', null, 'Modo Sin Conexión');
+    });
+
+    window.addEventListener('online', () => {
+      this.mostrarMensaje('🌐 Conexión a internet reestablecida. Ya puedes consultar el clima en tiempo real.', 'success', null, 'En Línea');
+    });
   },
 
   onMunicipioChange: function() {
     const select = document.getElementById('select-municipio');
+    const errorMsg = document.getElementById('input-error-municipio');
     const id = select.value;
+
+    // Limpiar estado de error si el usuario selecciona una opción válida
+    if (id) {
+      select.classList.remove('is-invalid');
+      if (errorMsg) errorMsg.classList.remove('visible');
+    }
+
     const municipio = this.MUNICIPIOS_EL_SALVADOR.find(m => m.id === id);
     this.state.selectedMunicipio = municipio || null;
 
@@ -259,22 +277,76 @@ const App = {
   },
 
   // ==========================================================================
-  // FUNCIÓN PRINCIPAL: CONSULTAR PRONÓSTICO Y EVALUAR RIEGO
+  // HELPER M4: PETICIÓN CON TIMEOUT USANDO ABORTCONTROLLER
+  // Evita que la aplicación quede colgada indefinidamente en el campo
+  // ==========================================================================
+  fetchConTimeout: async function(url, timeoutMs = REQUEST_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
+
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      return response;
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        const timeoutError = new Error('TIMEOUT');
+        timeoutError.name = 'TimeoutError';
+        throw timeoutError;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  },
+
+  // ==========================================================================
+  // FUNCIÓN PRINCIPAL RESILIENTE: CONSULTAR PRONÓSTICO (M4)
   // ==========================================================================
   consultarPronostico: async function() {
-    if (!this.state.selectedMunicipio) {
-      this.mostrarMensaje('Por favor, selecciona un municipio de El Salvador primero.', 'warning');
+    if (this.state.isFetching) return;
+
+    const select = document.getElementById('select-municipio');
+    const errorMsg = document.getElementById('input-error-municipio');
+
+    // REQUISITO M4.1: Validación estricta - Asegurar municipio seleccionado antes de consultar
+    if (!this.state.selectedMunicipio || !select.value) {
+      select.classList.add('is-invalid');
+      select.classList.add('shake');
+      setTimeout(() => {
+        select.classList.remove('shake');
+      }, 450);
+
+      if (errorMsg) errorMsg.classList.add('visible');
+      select.focus();
+      this.mostrarMensaje('⚠️ Debes seleccionar un municipio salvadoreño en la lista antes de consultar el clima.', 'warning', null, 'Validación requerida');
       return;
     }
 
     const { lat, lon, nombre } = this.state.selectedMunicipio;
 
+    // Validación geográfica de coordenadas salvadoreñas
     const validacion = this.validarUbicacionElSalvador(lat, lon);
     if (!validacion.valido) {
       this.mostrarMensaje(validacion.error, 'danger');
       return;
     }
 
+    // Validación si el usuario configuró OpenWeatherMap sin clave
+    if (this.state.apiProvider === 'openweathermap' && !this.state.owmApiKey.trim()) {
+      this.mostrarMensaje('⚠️ Has seleccionado OpenWeatherMap pero no has ingresado una clave API. Puedes cambiar a Open-Meteo para consultar de inmediato.', 'warning', {
+        actionText: '🔄 Usar Open-Meteo ahora',
+        actionCallback: () => {
+          this.state.apiProvider = 'openmeteo';
+          this.actualizarEstadoUIConfig();
+          this.consultarPronostico();
+        }
+      });
+      return;
+    }
+
+    // REQUISITO M4.2: Activar indicador de carga claro y deshabilitar controles
     this.mostrarCargando(true);
     this.ocultarMensaje();
 
@@ -287,51 +359,111 @@ const App = {
         datosClima = await this.fetchOpenMeteo(lat, lon, nombre);
       }
 
+      // REQUISITO M4.4: Validación estricta de la integridad de los datos antes de actualizar estado
+      if (!datosClima || typeof datosClima.tempActual !== 'number' || isNaN(datosClima.tempActual) ||
+          typeof datosClima.probLluvia !== 'number' || isNaN(datosClima.probLluvia) ||
+          typeof datosClima.precipitacionMm !== 'number' || isNaN(datosClima.precipitacionMm)) {
+        throw new Error('La respuesta del clima contiene valores incompletos o corruptos.');
+      }
+
       this.state.weatherData = datosClima;
       this.procesarRecomendacionRiego(datosClima);
 
     } catch (error) {
-      console.error('Error al consultar pronóstico:', error);
+      // REQUISITO M4.3: Manejo adecuado de errores de red o caídas con mensajes instructivos
+      console.error('Error detallado en consulta de pronóstico:', error);
+      this.manejarErrorConsulta(error);
 
-      if (this.state.apiProvider === 'openweathermap') {
-        this.mostrarMensaje(
-          `Error en OpenWeatherMap: ${error.message}. Puedes usar la API pública Open-Meteo sin clave.`,
-          'danger'
-        );
-        this.crearBotonFallbackOpenMeteo();
-      } else {
-        this.mostrarMensaje(
-          `No se pudo obtener el pronóstico de Open-Meteo: ${error.message}. Verifica la señal de internet en tu teléfono.`,
-          'danger'
-        );
-      }
     } finally {
+      // Siempre desactivar indicador de carga pase lo que pase
       this.mostrarCargando(false);
     }
   },
 
+  // Clasificador e interpretador de fallos para dar solución amigable
+  manejarErrorConsulta: function(error) {
+    let titulo = 'No se pudo obtener el pronóstico';
+    let mensaje = '';
+    let opciones = null;
+
+    const estaOffline = !navigator.onLine;
+
+    if (estaOffline) {
+      titulo = '📡 Sin conexión a internet';
+      mensaje = 'Tu teléfono parece estar desconectado. Verifica que tus datos móviles o tu conexión Wi-Fi estén activos e intenta nuevamente.';
+      opciones = {
+        actionText: '🔄 Reintentar consulta',
+        actionCallback: () => this.consultarPronostico()
+      };
+    } else if (error.name === 'TimeoutError' || error.message === 'TIMEOUT') {
+      titulo = '⏱️ Tiempo de espera agotado';
+      mensaje = 'El servidor meteorológico tardó demasiado en responder (más de 8 segundos). La señal celular podría ser débil en este momento.';
+      opciones = {
+        actionText: '🔄 Reintentar ahora',
+        actionCallback: () => this.consultarPronostico()
+      };
+    } else if (this.state.apiProvider === 'openweathermap') {
+      titulo = 'Fallo en OpenWeatherMap';
+      mensaje = `${error.message}. Puedes consultar con Open-Meteo sin necesidad de claves.`;
+      opciones = {
+        actionText: '🔄 Cambiar a Open-Meteo y consultar',
+        actionCallback: () => {
+          this.state.apiProvider = 'openmeteo';
+          this.actualizarEstadoUIConfig();
+          this.consultarPronostico();
+        }
+      };
+    } else {
+      titulo = 'Fallo al conectar con Open-Meteo';
+      mensaje = `${error.message}. Por favor intenta nuevamente en unos momentos.`;
+      opciones = {
+        actionText: '🔄 Reintentar consulta',
+        actionCallback: () => this.consultarPronostico()
+      };
+    }
+
+    this.mostrarMensaje(mensaje, 'danger', opciones, titulo);
+  },
+
   // ==========================================================================
-  // CONSULTA A OPEN-METEO
+  // CONSULTA A OPEN-METEO CON TIMEOUT Y VALIDACIÓN
   // ==========================================================================
   fetchOpenMeteo: async function(lat, lon, nombre) {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,precipitation&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum&hourly=temperature_2m,precipitation_probability,precipitation,weather_code&timezone=America%2FEl_Salvador&forecast_days=1`;
 
     let response;
     try {
-      response = await fetch(url);
+      response = await this.fetchConTimeout(url);
     } catch (e) {
-      throw new Error('Fallo de red al conectar con Open-Meteo. Revisa tu conexión de datos.');
+      if (e.name === 'TimeoutError') throw e;
+      throw new Error('Fallo de red al contactar con el servidor de Open-Meteo.');
     }
 
     if (!response.ok) {
-      throw new Error(`Open-Meteo respondió con error HTTP ${response.status}.`);
+      if (response.status >= 500) {
+        throw new Error('El servidor de Open-Meteo está experimentando problemas temporales (Error 5xx).');
+      } else if (response.status === 429) {
+        throw new Error('Límite de solicitudes temporales alcanzado en el servidor.');
+      } else {
+        throw new Error(`Open-Meteo respondió con error HTTP ${response.status}.`);
+      }
     }
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (parseErr) {
+      throw new Error('La respuesta recibida no contiene un formato JSON válido.');
+    }
+
     return this.normalizarDatosOpenMeteo(data, nombre);
   },
 
   normalizarDatosOpenMeteo: function(data, nombre) {
+    if (!data || typeof data !== 'object') {
+      throw new Error('Datos meteorológicos vacíos o corruptos.');
+    }
+
     const current = data.current || {};
     const daily = data.daily || {};
     const hourly = data.hourly || {};
@@ -382,26 +514,36 @@ const App = {
   fetchOpenWeatherMap: async function(lat, lon, nombre) {
     const key = this.state.owmApiKey.trim();
     if (!key) {
-      throw new Error('No has ingresado una API Key de OpenWeatherMap. Puedes ingresar tu clave o usar Open-Meteo.');
+      throw new Error('No has ingresado una clave API de OpenWeatherMap.');
     }
 
     const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&lang=es&appid=${encodeURIComponent(key)}`;
 
     let response;
     try {
-      response = await fetch(url);
+      response = await this.fetchConTimeout(url);
     } catch (e) {
-      throw new Error('Fallo de red al contactar con OpenWeatherMap.');
+      if (e.name === 'TimeoutError') throw e;
+      throw new Error('Fallo de red al conectar con OpenWeatherMap.');
     }
 
     if (!response.ok) {
       if (response.status === 401) {
-        throw new Error('Clave de API de OpenWeatherMap no válida o aún en proceso de activación.');
+        throw new Error('Clave API de OpenWeatherMap no válida o aún no activada (las cuentas nuevas pueden tardar un par de horas).');
+      } else if (response.status === 429) {
+        throw new Error('Límite de peticiones gratuitas alcanzado en OpenWeatherMap.');
+      } else {
+        throw new Error(`OpenWeatherMap devolvió código HTTP ${response.status}.`);
       }
-      throw new Error(`OpenWeatherMap devolvió código HTTP ${response.status}.`);
     }
 
-    const json = await response.json();
+    let json;
+    try {
+      json = await response.json();
+    } catch (e) {
+      throw new Error('Respuesta corrupta de OpenWeatherMap.');
+    }
+
     return this.normalizarDatosOpenWeatherMap(json, nombre);
   },
 
@@ -489,10 +631,10 @@ const App = {
       justificacion = `Se recomienda REGAR el cultivo. La probabilidad de lluvia para hoy es de solo ${probLluvia}% (no supera el 50%) y la precipitación estimada es de ${precipitacionMm} mm (no supera los 2 mm), con una temperatura actual de ${tempActual}°C. Las condiciones atmosféricas indican que la huerta no recibirá agua natural suficiente. Se aconseja regar temprano en la mañana o al atardecer para evitar pérdidas por evaporación solar.`;
     }
 
-    // Guardar estado de la última recomendación en memoria
+    // Guardar estado verificado de la última recomendación
     this.state.lastRecommendation = {
       municipio: clima.municipio,
-      veredicto: veredicto, // 'NO REGAR' o 'REGAR'
+      veredicto: veredicto,
       probLluvia: probLluvia,
       precipitacionMm: precipitacionMm,
       temp: tempActual,
@@ -575,7 +717,7 @@ const App = {
       if (clima.tempMin !== null && clima.tempMax !== null) {
         valTempMinMax.textContent = `Mín: ${clima.tempMin}°C / Máx: ${clima.tempMax}°C`;
       } else {
-        valTempMinMax.textContent = 'Sensación térmica estable';
+        valTempMinMax.textContent = 'Sensación estable';
       }
     }
 
@@ -588,7 +730,8 @@ const App = {
   },
 
   // ==========================================================================
-  // PERSISTENCIA Y RENDERIZADO DEL HISTORIAL (M2 + M3)
+  // REQUISITO M4.4: BLINDAJE DE PERSISTENCIA EN LOCALSTORAGE
+  // Ningún error de timeout, red o datos corruptos puede alterar el historial
   // ==========================================================================
 
   obtenerHistorialStorage: function() {
@@ -596,7 +739,24 @@ const App = {
       const data = localStorage.getItem(STORAGE_KEY);
       if (!data) return [];
       const parseado = JSON.parse(data);
-      return Array.isArray(parseado) ? parseado : [];
+      // Validar que sea un array y filtrar registros corruptos o incompletos (M4)
+      if (!Array.isArray(parseado)) {
+        console.warn('El historial en localStorage no era un array. Inicializando vacío.');
+        return [];
+      }
+      return parseado.filter(item => {
+        return item &&
+          typeof item === 'object' &&
+          typeof item.id === 'string' &&
+          typeof item.fechaHora === 'string' &&
+          typeof item.municipio === 'string' &&
+          (item.decisionTomada === 'REGAR' || item.decisionTomada === 'NO REGAR') &&
+          item.climaReportado &&
+          typeof item.climaReportado === 'object' &&
+          typeof item.climaReportado.temperatura === 'number' && !isNaN(item.climaReportado.temperatura) &&
+          typeof item.climaReportado.probLluvia === 'number' && !isNaN(item.climaReportado.probLluvia) &&
+          typeof item.climaReportado.precipitacionMm === 'number' && !isNaN(item.climaReportado.precipitacionMm);
+      });
     } catch (e) {
       console.error('Error al leer historial desde localStorage:', e);
       return [];
@@ -609,12 +769,22 @@ const App = {
   },
 
   guardarDecision: function(decisionTomada) {
+    // REQUISITO M4.1 & M4.4: Validar estrictamente la presencia y sanidad de datos
     if (!this.state.lastRecommendation) {
-      this.mostrarMensaje('Primero consulta el clima de un municipio antes de registrar tu decisión.', 'warning');
+      this.mostrarMensaje('⚠️ Primero debes consultar el clima de un municipio antes de poder registrar una decisión.', 'warning');
       return;
     }
 
     const rec = this.state.lastRecommendation;
+
+    // Validación estricta contra datos incompletos o NaN
+    if (typeof rec.temp !== 'number' || isNaN(rec.temp) ||
+        typeof rec.probLluvia !== 'number' || isNaN(rec.probLluvia) ||
+        typeof rec.precipitacionMm !== 'number' || isNaN(rec.precipitacionMm) ||
+        !rec.municipio || typeof rec.municipio !== 'string') {
+      this.mostrarMensaje('❌ Los datos climáticos actuales no son íntegros para guardarse. Por favor realiza una nueva consulta.', 'danger');
+      return;
+    }
 
     const ahora = new Date();
     const fechaHoraFormateada = ahora.toLocaleString('es-SV', {
@@ -653,7 +823,7 @@ const App = {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(historial));
       this.renderizarHistorial(historial);
-      this.mostrarMensaje(`✅ Decisión "${decisionTomada}" guardada en tu teléfono.`, 'info');
+      this.mostrarMensaje(`✅ Decisión "${decisionTomada}" guardada en el historial con fecha y clima.`, 'success');
 
       const historySection = document.getElementById('history-container');
       if (historySection) {
@@ -661,7 +831,7 @@ const App = {
       }
     } catch (e) {
       console.error('Error al persistir en localStorage:', e);
-      this.mostrarMensaje('No se pudo guardar la decisión en el almacenamiento local de tu navegador.', 'warning');
+      this.mostrarMensaje('No se pudo guardar la decisión en el almacenamiento local de tu navegador (cuota excedida o modo privado).', 'danger');
     }
   },
 
@@ -681,7 +851,7 @@ const App = {
       this.mostrarMensaje('🗑️ Historial de decisiones vaciado por completo.', 'info');
     } catch (e) {
       console.error('Error al limpiar localStorage:', e);
-      this.mostrarMensaje('Ocurrió un error al intentar vaciar el historial.', 'warning');
+      this.mostrarMensaje('Ocurrió un error al intentar vaciar el historial.', 'danger');
     }
   },
 
@@ -698,11 +868,6 @@ const App = {
     }
   },
 
-  /**
-   * Renderiza el listado visual del historial en pantalla (M3)
-   * - Mobile-First, sin desbordes horizontales
-   * - Empty state ilustrado cuando no hay registros
-   */
   renderizarHistorial: function(historial) {
     const contenedor = document.getElementById('history-container');
     const badgeCount = document.getElementById('history-count-badge');
@@ -712,7 +877,6 @@ const App = {
       badgeCount.textContent = `${historial.length} ${historial.length === 1 ? 'guardada' : 'guardadas'}`;
     }
 
-    // ESTADO VACÍO (EMPTY STATE M3): Ilustración SVG limpia y mensaje orientador
     if (!historial || historial.length === 0) {
       contenedor.innerHTML = `
         <div class="history-empty-container">
@@ -738,7 +902,6 @@ const App = {
       return;
     }
 
-    // LISTADO RESPONSIVE SIN DESBORDE HORIZONTAL (M3)
     let html = '<div class="history-list">';
     historial.forEach(item => {
       const esNo = item.decisionTomada === 'NO REGAR';
@@ -746,9 +909,9 @@ const App = {
       const textoBadge = esNo ? '🛑 DECISIÓN: NO REGAR' : '💧 DECISIÓN: REGAR';
 
       const clima = item.climaReportado || {};
-      const tempStr = (clima.temperatura !== undefined) ? `${clima.temperatura}°C` : '--°C';
-      const probStr = (clima.probLluvia !== undefined) ? `${clima.probLluvia}%` : '--%';
-      const lluviaStr = (clima.precipitacionMm !== undefined) ? `${clima.precipitacionMm} mm` : '-- mm';
+      const tempStr = (typeof clima.temperatura === 'number') ? `${clima.temperatura}°C` : '--°C';
+      const probStr = (typeof clima.probLluvia === 'number') ? `${clima.probLluvia}%` : '--%';
+      const lluviaStr = (typeof clima.precipitacionMm === 'number') ? `${clima.precipitacionMm} mm` : '-- mm';
       const condStr = clima.condicion || 'Cielo variable';
 
       const coincidio = item.sugerenciaSistema ? (item.decisionTomada === item.sugerenciaSistema) : null;
@@ -767,7 +930,6 @@ const App = {
             <span>📅 <strong>Fecha y Hora:</strong> ${this.escaparHtml(item.fechaHora || '--')}</span>
           </div>
 
-          <!-- Cuadrícula 2x2 que se adapta limpiamente sin desbordar -->
           <div class="history-weather-box" aria-label="Condiciones climáticas registradas">
             <div class="history-weather-item">
               <span>🌡️ Temp:</span> <strong>${tempStr}</strong>
@@ -798,7 +960,7 @@ const App = {
   },
 
   // ==========================================================================
-  // HELPERS DE UI
+  // HELPERS DE UI Y ALERTAS ROBUSTAS (M4)
   // ==========================================================================
   escaparHtml: function(str) {
     if (!str) return '';
@@ -810,21 +972,69 @@ const App = {
       .replace(/'/g, '&#039;');
   },
 
-  mostrarMensaje: function(texto, tipo = 'info') {
+  /**
+   * Muestra alertas amigables e interactivas con opción de reintento o cierre
+   * 
+   * @param {string} texto Mensaje descriptivo
+   * @param {'danger' | 'warning' | 'info' | 'success'} tipo Nivel de alerta
+   * @param {object|null} opciones Acciones interactivas ({actionText, actionCallback})
+   * @param {string|null} titulo Título opcional de la alerta
+   */
+  mostrarMensaje: function(texto, tipo = 'info', opciones = null, titulo = null) {
     const contenedor = document.getElementById('alert-container');
     if (!contenedor) return;
 
+    let icon = 'ℹ️';
+    if (tipo === 'danger') icon = '❌';
+    if (tipo === 'warning') icon = '⚠️';
+    if (tipo === 'success') icon = '✅';
+
+    const tituloHtml = titulo ? `<strong class="alert-title">${this.escaparHtml(titulo)}</strong>` : '';
+
+    let actionBtnHtml = '';
+    if (opciones && opciones.actionText) {
+      actionBtnHtml = `
+        <div class="alert-actions">
+          <button id="alert-action-btn" class="btn btn-sm btn-secondary" type="button">
+            ${this.escaparHtml(opciones.actionText)}
+          </button>
+        </div>
+      `;
+    }
+
     contenedor.innerHTML = `
-      <div class="alert alert-${tipo}">
-        <span>${this.escaparHtml(texto)}</span>
+      <div class="alert-box alert-${tipo}">
+        <div class="alert-header">
+          <div class="alert-message-content">
+            <span class="alert-icon" aria-hidden="true">${icon}</span>
+            <div>
+              ${tituloHtml}
+              <span>${this.escaparHtml(texto)}</span>
+            </div>
+          </div>
+          <button class="alert-close-btn" type="button" aria-label="Cerrar mensaje" onclick="App.ocultarMensaje()">✕</button>
+        </div>
+        ${actionBtnHtml}
       </div>
     `;
+
     contenedor.style.display = 'block';
 
-    if (tipo === 'info') {
+    if (opciones && opciones.actionCallback) {
+      const btn = document.getElementById('alert-action-btn');
+      if (btn) {
+        btn.addEventListener('click', () => {
+          this.ocultarMensaje();
+          opciones.actionCallback();
+        });
+      }
+    }
+
+    // Auto-ocultar alertas informativas o de éxito
+    if (tipo === 'info' || tipo === 'success') {
       setTimeout(() => {
         this.ocultarMensaje();
-      }, 4000);
+      }, 5000);
     }
   },
 
@@ -836,9 +1046,17 @@ const App = {
     }
   },
 
+  /**
+   * REQUISITO M4.2: Indicador de carga claro mientras se consulta la API
+   */
   mostrarCargando: function(mostrar) {
+    this.state.isFetching = mostrar;
+
     const loader = document.getElementById('loader-wrapper');
     const btn = document.getElementById('btn-consultar');
+    const select = document.getElementById('select-municipio');
+    const cardRecomendacion = document.getElementById('card-recomendacion');
+
     if (loader) {
       if (mostrar) {
         loader.classList.add('active');
@@ -846,29 +1064,21 @@ const App = {
         loader.classList.remove('active');
       }
     }
+
     if (btn) {
       btn.disabled = mostrar;
-      btn.textContent = mostrar ? '⏳ Consultando clima...' : '🔍 Consultar Clima y Evaluar Riego';
+      btn.textContent = mostrar ? '⏳ Consultando pronóstico en tiempo real...' : '🔍 Consultar Clima y Evaluar Riego';
     }
-  },
 
-  crearBotonFallbackOpenMeteo: function() {
-    const contenedor = document.getElementById('alert-container');
-    if (!contenedor) return;
+    if (select) {
+      select.disabled = mostrar;
+    }
 
-    const btnFallback = document.createElement('button');
-    btnFallback.className = 'btn btn-secondary btn-sm';
-    btnFallback.style.marginTop = '8px';
-    btnFallback.textContent = '🔄 Consultar con Open-Meteo ahora (Pública y sin clave)';
-    btnFallback.onclick = () => {
-      this.state.apiProvider = 'openmeteo';
-      this.actualizarEstadoUIConfig();
-      this.consultarPronostico();
-    };
-
-    const alertBox = contenedor.querySelector('.alert');
-    if (alertBox) {
-      alertBox.appendChild(btnFallback);
+    // Si comienza la carga, desvanecer ligeramente la tarjeta de recomendación para evitar confusión
+    if (cardRecomendacion && mostrar) {
+      cardRecomendacion.style.opacity = '0.4';
+    } else if (cardRecomendacion) {
+      cardRecomendacion.style.opacity = '1';
     }
   }
 };

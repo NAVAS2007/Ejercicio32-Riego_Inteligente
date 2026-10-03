@@ -23,15 +23,15 @@
             <p class="brand-subtitle">Huertas y Parcelas de El Salvador 🇸🇻</p>
           </div>
         </div>
-        <span class="header-badge">M3 Móvil Campo</span>
+        <span class="header-badge">M4 Resiliente</span>
       </div>
     </header>
 
     <!-- Contenedor Principal (Mobile-First) -->
     <main class="main-container">
       
-      <!-- Contenedor dinámico de alertas y mensajes de confirmación -->
-      <div id="alert-container" style="display: none;" role="alert" aria-live="assertive"></div>
+      <!-- Contenedor dinámico de alertas y mensajes de error/confirmación (M4) -->
+      <div id="alert-container" style="display: none;" role="region" aria-live="polite"></div>
 
       <!-- PASO 1: Consulta de Pronóstico del Municipio -->
       <section class="card" aria-labelledby="sec1-heading">
@@ -42,9 +42,12 @@
 
         <div class="form-group">
           <label for="select-municipio" class="form-label">Municipio o Zona de Cultivo:</label>
-          <select id="select-municipio" class="form-select" aria-describedby="municipio-coords">
-            <option value="">Cargando municipios salvadoreños...</option>
+          <select id="select-municipio" class="form-select" aria-describedby="municipio-coords input-error-municipio">
+            <option value="">-- Selecciona un municipio salvadoreño --</option>
           </select>
+          <div id="input-error-municipio" class="input-error-msg" role="alert">
+            <span>⚠️</span> Debes seleccionar un municipio antes de consultar el clima.
+          </div>
           <div id="municipio-coords" class="form-help"></div>
         </div>
 
@@ -52,12 +55,11 @@
           🔍 Consultar Clima y Evaluar Riego
         </button>
 
-        <!-- Indicador de carga accesible -->
+        <!-- Indicador de carga accesible y claro (M4) -->
         <div id="loader-wrapper" class="loader-wrapper" role="status" aria-live="polite">
-          <div class="spinner"></div>
-          <p style="font-size: 0.95rem; font-weight: 700; color: var(--color-text-main);">
-            Consultando pronóstico en tiempo real...
-          </p>
+          <div class="spinner" aria-hidden="true"></div>
+          <p class="loader-text">Consultando pronóstico en tiempo real...</p>
+          <p class="loader-subtext">Obteniendo temperatura, probabilidad y lluvia del día para tu municipio.</p>
         </div>
 
         <!-- Configuración de Proveedor de Clima (Colapsable) -->
@@ -157,7 +159,7 @@
           </div>
         </div>
 
-        <!-- Registro de decisión en el historial (M2 / M3) -->
+        <!-- Registro de decisión en el historial (M2 / M3 / M4) -->
         <div class="log-action-panel">
           <div class="log-action-title">
             <span>📝 Guardar decisión en el Historial de la Huerta:</span>
