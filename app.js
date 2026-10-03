@@ -1,20 +1,22 @@
 /**
  * ============================================================================
  * RIEGO INTELIGENTE - EL SALVADOR
- * Módulo de Decisión de Negocio y Consulta de Clima (M1)
+ * Lógica de Negocio y Persistencia en LocalStorage (M1 + M2)
  * 
- * Regla de Decisión (M1):
- * - Si probabilidad de lluvia > 50% o precipitación prevista > 2 mm:
- *   Recomendar "NO REGAR" con justificación agronómica detallada.
- * - De lo contrario:
- *   Recomendar "REGAR".
+ * Requisitos de Persistencia (M2):
+ * 1. Almacenamiento local utilizando localStorage.
+ * 2. Cada registro guarda: fecha y hora, municipio, clima reportado y decisión (REGAR o NO REGAR).
+ * 3. Persistencia intacta al recargar la página.
+ * 4. Opción para vaciar o borrar el historial completo.
  * 
  * Código en JavaScript Vanilla (Sin librerías externas)
  * ============================================================================
  */
 
+const STORAGE_KEY = 'riego_historial_sv';
+
 const App = {
-  // Estado de la aplicación
+  // Estado en memoria de la aplicación
   state: {
     selectedMunicipio: null,
     weatherData: null,
@@ -121,10 +123,14 @@ const App = {
     return { valido: true };
   },
 
-  // Inicialización de la aplicación
+  // ==========================================================================
+  // INICIALIZACIÓN DE LA APLICACIÓN
+  // Carga inmediatamente el historial guardado en localStorage
+  // ==========================================================================
   init: function() {
     this.poblarSelectorMunicipios();
     this.vincularEventos();
+    // REQUISITO M2: Cargar el historial desde localStorage al iniciar o recargar
     this.cargarHistorial();
     this.actualizarEstadoUIConfig();
 
@@ -207,15 +213,17 @@ const App = {
       });
     }
 
+    // REQUISITO M2: Registrar decisión tomada ("NO REGAR" o "REGAR")
     const btnLogNo = document.getElementById('btn-log-no');
     const btnLogSi = document.getElementById('btn-log-si');
     if (btnLogNo) {
-      btnLogNo.addEventListener('click', () => this.guardarDecision('Decidí NO regar'));
+      btnLogNo.addEventListener('click', () => this.guardarDecision('NO REGAR'));
     }
     if (btnLogSi) {
-      btnLogSi.addEventListener('click', () => this.guardarDecision('Decidí REGAR'));
+      btnLogSi.addEventListener('click', () => this.guardarDecision('REGAR'));
     }
 
+    // REQUISITO M2: Vaciar historial completo
     const btnLimpiarHistorial = document.getElementById('btn-limpiar-historial');
     if (btnLimpiarHistorial) {
       btnLimpiarHistorial.addEventListener('click', () => this.limpiarHistorial());
@@ -265,7 +273,6 @@ const App = {
 
     const { lat, lon, nombre } = this.state.selectedMunicipio;
 
-    // Validación geográfica estricta
     const validacion = this.validarUbicacionElSalvador(lat, lon);
     if (!validacion.valido) {
       this.mostrarMensaje(validacion.error, 'danger');
@@ -281,13 +288,10 @@ const App = {
       if (this.state.apiProvider === 'openweathermap') {
         datosClima = await this.fetchOpenWeatherMap(lat, lon, nombre);
       } else {
-        // Por defecto: Consulta oficial a Open-Meteo
         datosClima = await this.fetchOpenMeteo(lat, lon, nombre);
       }
 
       this.state.weatherData = datosClima;
-
-      // Ejecutar la regla de decisión M1
       this.procesarRecomendacionRiego(datosClima);
 
     } catch (error) {
@@ -311,15 +315,9 @@ const App = {
   },
 
   // ==========================================================================
-  // TAREA 1: CONSULTA PRECISA A OPEN-METEO
-  // Obtiene correctamente la temperatura, la probabilidad de lluvia y la
-  // precipitación del día actual para el municipio seleccionado.
+  // CONSULTA A OPEN-METEO
   // ==========================================================================
   fetchOpenMeteo: async function(lat, lon, nombre) {
-    // Parámetros solicitados:
-    // current: temperatura actual, humedad, código de clima
-    // daily: probabilidad máxima de lluvia del día actual, suma de precipitación en mm, min/max temp
-    // hourly: respaldo horario para asegurar precisión en caso de retraso en daily
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,precipitation&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum&hourly=temperature_2m,precipitation_probability,precipitation,weather_code&timezone=America%2FEl_Salvador&forecast_days=1`;
 
     let response;
@@ -342,7 +340,6 @@ const App = {
     const daily = data.daily || {};
     const hourly = data.hourly || {};
 
-    // 1. Temperatura actual del día (°C)
     let tempActual = 25;
     if (typeof current.temperature_2m === 'number') {
       tempActual = Math.round(current.temperature_2m);
@@ -351,28 +348,23 @@ const App = {
       tempActual = Math.round(hourly.temperature_2m[hora] || hourly.temperature_2m[0]);
     }
 
-    // 2. Probabilidad de lluvia del día actual (%)
     let probLluvia = 0;
     if (daily.precipitation_probability_max && Array.isArray(daily.precipitation_probability_max) && daily.precipitation_probability_max[0] !== null && daily.precipitation_probability_max[0] !== undefined) {
       probLluvia = Math.round(daily.precipitation_probability_max[0]);
     } else if (hourly.precipitation_probability && Array.isArray(hourly.precipitation_probability)) {
-      // Máximo de las 24 horas de hoy
       const horasHoy = hourly.precipitation_probability.slice(0, 24);
       probLluvia = Math.round(Math.max(...horasHoy, 0));
     }
 
-    // 3. Precipitación prevista del día actual en mm
     let precipitacionMm = 0;
     if (daily.precipitation_sum && Array.isArray(daily.precipitation_sum) && daily.precipitation_sum[0] !== null && daily.precipitation_sum[0] !== undefined) {
       precipitacionMm = parseFloat(daily.precipitation_sum[0].toFixed(1));
     } else if (hourly.precipitation && Array.isArray(hourly.precipitation)) {
-      // Sumatoria de las 24 horas de hoy
       const horasHoy = hourly.precipitation.slice(0, 24);
       const total = horasHoy.reduce((acc, val) => acc + (Number(val) || 0), 0);
       precipitacionMm = parseFloat(total.toFixed(1));
     }
 
-    // Datos complementarios
     const humedad = (typeof current.relative_humidity_2m === 'number') ? Math.round(current.relative_humidity_2m) : 65;
     const condicion = this.interpretarCodigoClimaWMO(current.weather_code);
     const tempMax = (daily.temperature_2m_max && daily.temperature_2m_max[0] !== undefined) ? Math.round(daily.temperature_2m_max[0]) : null;
@@ -391,7 +383,6 @@ const App = {
     };
   },
 
-  // Consulta de compatibilidad con OpenWeatherMap
   fetchOpenWeatherMap: async function(lat, lon, nombre) {
     const key = this.state.owmApiKey.trim();
     if (!key) {
@@ -420,7 +411,7 @@ const App = {
 
   normalizarDatosOpenWeatherMap: function(json, nombre) {
     const list = json.list || [];
-    const lecturasHoy = list.slice(0, 8); // Próximas 24 horas (bloques de 3h)
+    const lecturasHoy = list.slice(0, 8);
 
     let maxProb = 0;
     let sumaMm = 0;
@@ -464,18 +455,13 @@ const App = {
   },
 
   // ==========================================================================
-  // TAREA 2: REGLA CLARA DE DECISIÓN (M1)
-  // - Si probabilidad de lluvia > 50% O precipitación prevista > 2mm:
-  //   Recomendar "NO REGAR" con justificación agronómica.
-  // - En caso contrario:
-  //   Recomendar "REGAR".
+  // REGLA DE DECISIÓN (M1)
   // ==========================================================================
   procesarRecomendacionRiego: function(clima) {
     const probLluvia = clima.probLluvia;
     const precipitacionMm = clima.precipitacionMm;
     const tempActual = clima.tempActual;
 
-    // REGLA DE NEGOCIO M1:
     const cumpleReglaNoRegar = (probLluvia > 50) || (precipitacionMm > 2);
 
     let veredicto = '';
@@ -490,9 +476,8 @@ const App = {
       claseCss = 'no-regar';
       resumen = 'No se recomienda regar hoy. La lluvia esperada aportará la humedad necesaria a la parcela.';
 
-      // Justificación agronómica según qué condición o condiciones activaron la regla
       if (probLluvia > 50 && precipitacionMm > 2) {
-        justificacion = `Se recomienda NO REGAR el cultivo. La probabilidad de lluvia para hoy es del ${probLluvia}% (supera el umbral del 50%) y la precipitación prevista es de ${precipitacionMm} mm (supera el umbral de 2 mm). Regar en estas condiciones saturaría el suelo, desperdiciaría agua y aumentaría el riesgo de asfixia radicular y enfermedades fungosas. El aporte pluvial será suficiente para la huerta.`;
+        justificacion = `Se recomienda NO REGAR el cultivo. La probabilidad de lluvia para hoy es del ${probLluvia}% (supera el umbral del 50%) y la precipitación prevista es de ${precipitacionMm} mm (supera el umbral de 2 mm). Regar en estas condiciones saturaría el suelo, desperdiciaría agua y aumentaría el riesgo de asfixia radicular. El aporte pluvial será suficiente para la huerta.`;
       } else if (probLluvia > 50) {
         justificacion = `Se recomienda NO REGAR el cultivo. La probabilidad de lluvia para hoy es del ${probLluvia}% (supera el umbral del 50%), con una precipitación prevista de ${precipitacionMm} mm. El riesgo de lluvia es elevado; regar ahora provocaría exceso de humedad en el suelo y lavado de fertilizantes si cae la precipitación esperada.`;
       } else {
@@ -508,30 +493,28 @@ const App = {
       justificacion = `Se recomienda REGAR el cultivo. La probabilidad de lluvia para hoy es de solo ${probLluvia}% (no supera el 50%) y la precipitación estimada es de ${precipitacionMm} mm (no supera los 2 mm), con una temperatura actual de ${tempActual}°C. Las condiciones atmosféricas indican que la huerta no recibirá agua natural suficiente. Se aconseja regar temprano en la mañana o al atardecer para evitar pérdidas por evaporación solar.`;
     }
 
+    // Guardar estado de la última recomendación en memoria
     this.state.lastRecommendation = {
       municipio: clima.municipio,
-      veredicto: veredicto,
+      veredicto: veredicto, // 'NO REGAR' o 'REGAR'
       probLluvia: probLluvia,
       precipitacionMm: precipitacionMm,
       temp: tempActual,
+      condicion: clima.condicion,
+      humedad: clima.humedad,
       justificacion: justificacion,
       fecha: new Date().toISOString()
     };
 
-    // Tarea 3: Mostrar claramente el estado y la sugerencia en la interfaz
     this.renderizarRecomendacion(tituloVeredicto, resumen, justificacion, claseCss, clima, cumpleReglaNoRegar);
   },
 
-  // ==========================================================================
-  // TAREA 3: MOSTRAR CLARAMENTE EL ESTADO DEL CLIMA Y LA SUGERENCIA FINAL
-  // ==========================================================================
   renderizarRecomendacion: function(titulo, resumen, justificacion, claseCss, clima, esNoRegar) {
     const cardEl = document.getElementById('card-recomendacion');
     if (!cardEl) return;
 
     cardEl.style.display = 'block';
 
-    // 1. Sugerencia final en el banner
     const bannerEl = document.getElementById('recommendation-banner');
     if (bannerEl) {
       bannerEl.className = `recommendation-banner ${claseCss}`;
@@ -541,7 +524,6 @@ const App = {
       `;
     }
 
-    // 2. Justificación correspondiente
     const motivoEl = document.getElementById('rec-motivo-text');
     const motivoBox = document.querySelector('.motivo-box');
     if (motivoEl) {
@@ -551,13 +533,11 @@ const App = {
       motivoBox.className = `motivo-box ${claseCss}`;
     }
 
-    // 3. Encabezado del estado actual del clima
     const elMunicipio = document.getElementById('val-municipio-nombre');
     const elCondicion = document.getElementById('val-condicion-badge');
     if (elMunicipio) elMunicipio.textContent = clima.municipio;
     if (elCondicion) elCondicion.textContent = clima.condicion;
 
-    // 4. Métricas climáticas con resaltado visual del umbral de decisión
     const valProb = document.getElementById('val-prob-lluvia');
     const valProbTag = document.getElementById('val-prob-tag');
     const cardProb = document.getElementById('metric-prob-card');
@@ -608,136 +588,221 @@ const App = {
     if (valHumedad) valHumedad.textContent = `${clima.humedad}%`;
     if (valFuente) valFuente.textContent = `Fuente: ${clima.fuente}`;
 
-    // Desplazamiento fluido hacia la sugerencia en dispositivos móviles
     cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
   },
 
   // ==========================================================================
-  // HISTORIAL DE DECISIONES TOMADAS
+  // TAREA (M2): PERSISTENCIA Y ALMACENAMIENTO LOCAL EN LOCALSTORAGE
   // ==========================================================================
-  guardarDecision: function(accionRealizada) {
-    if (!this.state.lastRecommendation) {
-      this.mostrarMensaje('Primero consulta el pronóstico de un municipio antes de registrar la decisión.', 'warning');
-      return;
-    }
 
-    const nuevaEntrada = {
-      id: 'reg_' + Date.now(),
-      fecha: new Date().toLocaleString('es-SV', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
-      municipio: this.state.lastRecommendation.municipio,
-      veredicto: this.state.lastRecommendation.veredicto, // 'NO REGAR' o 'REGAR'
-      probLluvia: this.state.lastRecommendation.probLluvia,
-      precipitacionMm: this.state.lastRecommendation.precipitacionMm,
-      temp: this.state.lastRecommendation.temp,
-      accion: accionRealizada
-    };
-
-    let historial = this.obtenerHistorialStorage();
-    historial.unshift(nuevaEntrada);
-
-    if (historial.length > 30) {
-      historial = historial.slice(0, 30);
-    }
-
-    try {
-      localStorage.setItem('riego_historial_sv', JSON.stringify(historial));
-      this.renderizarHistorial(historial);
-      this.mostrarMensaje(`✅ Decisión registrada: "${accionRealizada}".`, 'info');
-    } catch (e) {
-      console.warn('Error al guardar en localStorage:', e);
-      this.mostrarMensaje('No se pudo guardar la decisión en el almacenamiento local.', 'warning');
-    }
-  },
-
+  /**
+   * Obtiene el array de registros desde localStorage de manera segura.
+   * Maneja errores en caso de cookies bloqueadas o navegación privada.
+   */
   obtenerHistorialStorage: function() {
     try {
-      const data = localStorage.getItem('riego_historial_sv');
+      const data = localStorage.getItem(STORAGE_KEY);
       if (!data) return [];
       const parseado = JSON.parse(data);
       return Array.isArray(parseado) ? parseado : [];
     } catch (e) {
-      console.error('Error al leer historial de localStorage:', e);
+      console.error('Error al leer historial desde localStorage:', e);
       return [];
     }
   },
 
+  /**
+   * Carga y renderiza el historial existente al iniciar o recargar la página.
+   * Garantiza que ningún registro previo se pierda.
+   */
   cargarHistorial: function() {
     const historial = this.obtenerHistorialStorage();
     this.renderizarHistorial(historial);
   },
 
-  limpiarHistorial: function() {
-    if (!confirm('¿Deseas vaciar todo el historial de decisiones de riego?')) {
+  /**
+   * Guarda un nuevo registro de decisión en localStorage.
+   * Requisito M2: Guarda fecha/hora, municipio, clima reportado y decisión (REGAR o NO REGAR).
+   * 
+   * @param {'REGAR' | 'NO REGAR'} decisionTomada
+   */
+  guardarDecision: function(decisionTomada) {
+    if (!this.state.lastRecommendation) {
+      this.mostrarMensaje('Primero consulta el clima de un municipio antes de registrar tu decisión.', 'warning');
       return;
     }
+
+    const rec = this.state.lastRecommendation;
+
+    // Formatear fecha y hora local de El Salvador
+    const ahora = new Date();
+    const fechaHoraFormateada = ahora.toLocaleString('es-SV', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    // Estructura completa requerida por M2
+    const nuevoRegistro = {
+      id: 'reg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      fechaHora: fechaHoraFormateada,
+      timestamp: ahora.getTime(),
+      municipio: rec.municipio,
+      // Clima reportado al momento de la toma de decisión
+      climaReportado: {
+        temperatura: rec.temp,
+        probLluvia: rec.probLluvia,
+        precipitacionMm: rec.precipitacionMm,
+        condicion: rec.condicion,
+        humedad: rec.humedad,
+        resumenTexto: `${rec.temp}°C | Prob. lluvia: ${rec.probLluvia}% | Precipitación: ${rec.precipitacionMm} mm (${rec.condicion})`
+      },
+      // Decisión tomada explícitamente: 'REGAR' o 'NO REGAR'
+      decisionTomada: decisionTomada,
+      // Recomendación previa sugerida por la regla del sistema
+      sugerenciaSistema: rec.veredicto
+    };
+
+    // Obtener historial previo
+    let historial = this.obtenerHistorialStorage();
+
+    // Insertar al inicio de la lista (orden cronológico descendente)
+    historial.unshift(nuevoRegistro);
+
+    // Limitar a los últimos 50 registros para optimizar el almacenamiento
+    if (historial.length > 50) {
+      historial = historial.slice(0, 50);
+    }
+
+    // Persistir en localStorage
     try {
-      localStorage.removeItem('riego_historial_sv');
-      this.renderizarHistorial([]);
-      this.mostrarMensaje('Historial de decisiones vaciado.', 'info');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(historial));
+      this.renderizarHistorial(historial);
+      this.mostrarMensaje(`✅ Decisión "${decisionTomada}" guardada en el historial con fecha y clima.`, 'info');
+
+      // Desplazar suavemente hacia el historial para confirmar visualmente
+      const historySection = document.getElementById('history-container');
+      if (historySection) {
+        historySection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
     } catch (e) {
-      console.error('Error al limpiar localStorage:', e);
+      console.error('Error al persistir en localStorage:', e);
+      this.mostrarMensaje('No se pudo guardar la decisión en el almacenamiento local de tu navegador.', 'warning');
     }
   },
 
+  /**
+   * Borra o vacía completamente el historial almacenado en localStorage.
+   */
+  limpiarHistorial: function() {
+    const historial = this.obtenerHistorialStorage();
+    if (historial.length === 0) {
+      this.mostrarMensaje('El historial ya se encuentra vacío.', 'info');
+      return;
+    }
+
+    const confirmar = confirm('¿Estás seguro de que deseas vaciar todo el historial de decisiones de riego? Esta acción no se puede deshacer.');
+    if (!confirmar) return;
+
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      this.renderizarHistorial([]);
+      this.mostrarMensaje('🗑️ Historial de decisiones vaciado por completo.', 'info');
+    } catch (e) {
+      console.error('Error al limpiar localStorage:', e);
+      this.mostrarMensaje('Ocurrió un error al intentar vaciar el historial.', 'warning');
+    }
+  },
+
+  /**
+   * Permite eliminar un registro individual del historial.
+   */
   eliminarRegistroHistorial: function(id) {
     let historial = this.obtenerHistorialStorage();
     historial = historial.filter(item => item.id !== id);
+
     try {
-      localStorage.setItem('riego_historial_sv', JSON.stringify(historial));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(historial));
       this.renderizarHistorial(historial);
+      this.mostrarMensaje('Registro eliminado del historial.', 'info');
     } catch (e) {
-      console.error('Error al actualizar historial:', e);
+      console.error('Error al actualizar localStorage:', e);
     }
   },
 
+  /**
+   * Renderiza el listado visual del historial en pantalla.
+   */
   renderizarHistorial: function(historial) {
     const contenedor = document.getElementById('history-container');
-    const badgeCount = document.getElementById('history-count');
+    const badgeCount = document.getElementById('history-count-badge');
     if (!contenedor) return;
 
+    // Actualizar contador del encabezado
     if (badgeCount) {
-      badgeCount.textContent = historial.length;
+      badgeCount.textContent = `${historial.length} ${historial.length === 1 ? 'registro' : 'registros'}`;
     }
 
-    if (historial.length === 0) {
+    // Estado vacío
+    if (!historial || historial.length === 0) {
       contenedor.innerHTML = `
         <div class="history-empty">
-          <p>🌱 Aún no has registrado ninguna decisión de riego.</p>
-          <p style="margin-top:4px; font-size:0.75rem;">Consulta el clima y pulsa "Decidí NO regar" o "Decidí REGAR" para llevar una bitácora de tu cultivo.</p>
+          <p style="font-size: 1.1rem; font-weight: 700; margin-bottom: 6px;">🌱 No hay decisiones registradas aún</p>
+          <p>Consulta el clima de tu municipio y presiona <strong>"Registrar Decisión: NO REGAR"</strong> o <strong>"Registrar Decisión: REGAR"</strong>.</p>
+          <p style="font-size: 0.76rem; margin-top: 8px; color: var(--color-text-muted);">
+            Tus registros se guardarán automáticamente en tu navegador y podrás consultarlos cada vez que vuelvas a abrir la app.
+          </p>
         </div>
       `;
       return;
     }
 
+    // Construcción de la lista
     let html = '<div class="history-list">';
     historial.forEach(item => {
-      const esNo = item.veredicto === 'NO REGAR' || item.veredicto === 'NO';
+      const esNo = item.decisionTomada === 'NO REGAR';
       const claseBadge = esNo ? 'no' : 'si';
-      const textoVeredicto = esNo ? 'Sugerencia: NO REGAR' : 'Sugerencia: REGAR';
-      const precipText = (item.precipitacionMm !== undefined) ? ` | 💧 ${item.precipitacionMm} mm` : '';
+      const textoBadge = esNo ? '🛑 DECISIÓN: NO REGAR' : '💧 DECISIÓN: REGAR';
+
+      // Datos del clima reportado
+      const clima = item.climaReportado || {};
+      const tempStr = (clima.temperatura !== undefined) ? `${clima.temperatura}°C` : '--°C';
+      const probStr = (clima.probLluvia !== undefined) ? `${clima.probLluvia}%` : '--%';
+      const lluviaStr = (clima.precipitacionMm !== undefined) ? `${clima.precipitacionMm} mm` : '-- mm';
+      const condStr = clima.condicion || 'Cielo variable';
+
+      // Coincidencia con la recomendación del sistema
+      const coincidio = item.sugerenciaSistema ? (item.decisionTomada === item.sugerenciaSistema) : null;
+      const coincidenciaTxt = coincidio === true 
+        ? '✓ Coincidió con la sugerencia técnica' 
+        : (coincidio === false ? 'ℹ️ Se tomó una decisión distinta a la sugerencia' : '');
 
       html += `
         <div class="history-item">
           <div class="history-item-top">
-            <span class="history-place">${this.escaparHtml(item.municipio)}</span>
-            <span class="history-badge ${claseBadge}">${textoVeredicto}</span>
+            <span class="history-place">📍 ${this.escaparHtml(item.municipio)}</span>
+            <span class="history-badge ${claseBadge}">${textoBadge}</span>
           </div>
-          <div class="history-meta">
-            <span>📅 ${this.escaparHtml(item.fecha)}</span>
-            <span>🌧️ Prob. lluvia: ${item.probLluvia}%${precipText}</span>
-            <span>🌡️ ${item.temp}°C</span>
+
+          <div class="history-datetime">
+            <span>📅 <strong>Fecha y Hora:</strong> ${this.escaparHtml(item.fechaHora || '--')}</span>
           </div>
-          <div class="history-action-taken">
-            Acción: ${this.escaparHtml(item.accion)}
+
+          <!-- Clima reportado en el momento de la decisión -->
+          <div class="history-weather-box" title="Clima reportado en este registro">
+            <span>🌡️ Temp: <strong>${tempStr}</strong></span>
+            <span>🌧️ Prob. Lluvia: <strong>${probStr}</strong></span>
+            <span>💧 Precipitación: <strong>${lluviaStr}</strong></span>
+            <span>${this.escaparHtml(condStr)}</span>
           </div>
-          <div class="history-item-actions">
-            <button class="btn btn-sm btn-danger-outline" onclick="App.eliminarRegistroHistorial('${item.id}')" title="Eliminar registro">
+
+          <div class="history-footer">
+            <span class="history-system-match">${this.escaparHtml(coincidenciaTxt)}</span>
+            <button class="btn btn-sm btn-danger-outline" onclick="App.eliminarRegistroHistorial('${item.id}')" title="Eliminar este registro">
               🗑️ Borrar
             </button>
           </div>
@@ -749,7 +814,9 @@ const App = {
     contenedor.innerHTML = html;
   },
 
-  // Helpers de interfaz
+  // ==========================================================================
+  // HELPERS DE UI
+  // ==========================================================================
   escaparHtml: function(str) {
     if (!str) return '';
     return String(str)
@@ -770,6 +837,13 @@ const App = {
       </div>
     `;
     contenedor.style.display = 'block';
+
+    // Auto-ocultar mensajes informativos después de 4 segundos
+    if (tipo === 'info') {
+      setTimeout(() => {
+        this.ocultarMensaje();
+      }, 4000);
+    }
   },
 
   ocultarMensaje: function() {
@@ -817,11 +891,12 @@ const App = {
   }
 };
 
-// Iniciar aplicación
+// Iniciar aplicación al cargar el DOM
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => App.init());
 } else {
   App.init();
 }
 
+// Exponer en window para acciones de botones
 window.App = App;

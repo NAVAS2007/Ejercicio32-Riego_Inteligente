@@ -22,14 +22,14 @@
             <p class="brand-subtitle">Huertas y Parcelas de El Salvador 🇸🇻</p>
           </div>
         </div>
-        <span class="header-badge">M1 Optimizado</span>
+        <span class="header-badge">M2 Persistencia Local</span>
       </div>
     </header>
 
     <!-- Contenedor Principal (Mobile-First) -->
     <main class="main-container">
       
-      <!-- Contenedor dinámico de alertas y mensajes de error -->
+      <!-- Contenedor dinámico de alertas y mensajes de confirmación -->
       <div id="alert-container" style="display: none;"></div>
 
       <!-- PASO 1: Consulta de Pronóstico del Municipio -->
@@ -55,7 +55,7 @@
         <div id="loader-wrapper" class="loader-wrapper" role="status" aria-live="polite">
           <div class="spinner"></div>
           <p style="font-size: 0.85rem; color: var(--color-text-muted);">
-            Consultando servicio meteorológico en tiempo real...
+            Consultando pronóstico en tiempo real...
           </p>
         </div>
 
@@ -129,7 +129,7 @@
 
         <!-- ESTADO DETALLADO DEL CLIMA ACTUAL -->
         <div class="weather-summary-header">
-          <span class="weather-section-title">📊 Estado del Clima Hoy en <span id="val-municipio-nombre">--</span></span>
+          <span class="weather-section-title">📊 Clima Reportado Hoy en <span id="val-municipio-nombre">--</span></span>
           <span id="val-condicion-badge" class="weather-cond-badge">--</span>
         </div>
 
@@ -144,7 +144,7 @@
             <span id="val-lluvia-mm" class="metric-value">0.0 mm</span>
             <span id="val-precip-tag" class="metric-sub">Umbral: 2 mm</span>
           </div>
-          <div class="metric-item">
+          <div class="metric-item" id="metric-temperatura-card">
             <span class="metric-title">Temperatura Actual</span>
             <span id="val-temperatura" class="metric-value">--°C</span>
             <span id="val-temp-minmax" class="metric-sub">Min / Max del día</span>
@@ -156,34 +156,46 @@
           </div>
         </div>
 
-        <!-- Registro de acción en historial -->
+        <!-- Registro de decisión en el historial (M2) -->
         <div class="log-action-panel">
-          <div class="log-action-title">Registrar decisión tomada en tu huerta/parcela:</div>
+          <div class="log-action-title">
+            <span>📝 Guardar decisión en el Historial de la Huerta (localStorage):</span>
+          </div>
           <div class="action-buttons-row">
-            <button id="btn-log-no" class="btn btn-secondary btn-sm" type="button">
-              🛑 Decidí NO regar
+            <button id="btn-log-no" class="btn btn-decision-no" type="button">
+              🛑 Registrar Decisión: NO REGAR
             </button>
-            <button id="btn-log-si" class="btn btn-secondary btn-sm" type="button">
-              💧 Decidí REGAR
+            <button id="btn-log-si" class="btn btn-decision-si" type="button">
+              💧 Registrar Decisión: REGAR
             </button>
           </div>
+          <p class="form-help" style="margin-top: 8px;">
+            Al registrar, se guardará en tu navegador con la fecha, hora, municipio y clima reportado.
+          </p>
         </div>
       </section>
 
-      <!-- PASO 3: Historial de Decisiones Tomadas -->
+      <!-- PASO 3: Historial de Decisiones Tomadas (M2) -->
       <section class="card" aria-labelledby="sec3-heading">
         <div class="history-header">
-          <h2 id="sec3-heading" class="card-title" style="margin-bottom: 0;">
-            <span class="step-number">3</span>
-            <span>Historial de Decisiones (<span id="history-count">0</span>)</span>
-          </h2>
-          <button id="btn-limpiar-historial" class="btn btn-sm btn-danger-outline" type="button" title="Vaciar historial">
-            Vaciar Historial
+          <div class="history-title-wrapper">
+            <h2 id="sec3-heading" class="card-title" style="margin-bottom: 0;">
+              <span class="step-number">3</span>
+              <span>Historial de Decisiones</span>
+            </h2>
+            <span id="history-count-badge" class="history-count-badge" title="Cantidad de registros guardados">0 guardadas</span>
+          </div>
+          <button id="btn-limpiar-historial" class="btn btn-sm btn-danger-outline" type="button" title="Borrar todo el historial">
+            🗑️ Vaciar Historial
           </button>
         </div>
 
+        <p class="history-subtitle">
+          Los registros se conservan de forma permanente en este dispositivo mediante almacenamiento local (localStorage).
+        </p>
+
         <div id="history-container">
-          <!-- Generado dinámicamente desde localStorage -->
+          <!-- Generado dinámicamente desde localStorage al cargar la página -->
         </div>
       </section>
 
@@ -191,7 +203,7 @@
 
     <!-- Pie de página -->
     <footer class="app-footer">
-      <p><strong>Riego Inteligente El Salvador</strong> — Cuidado del agua para huertas escolares y cultivos comunitarios.</p>
+      <p><strong>Riego Inteligente El Salvador</strong> — Registro y cuidado del agua para huertas escolares y familiares.</p>
     </footer>
 
     <!-- Lógica de la aplicación en JavaScript Vanilla -->
