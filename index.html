@@ -2,17 +2,18 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
     <title>Riego Inteligente El Salvador</title>
-    <meta name="description" content="Aplicación para pequeños agricultores y huertas escolares que asesora sobre el riego según el pronóstico de lluvia en municipios de El Salvador." />
+    <meta name="description" content="Aplicación web móvil para pequeños agricultores y huertas escolares que asesora sobre el riego según el pronóstico de lluvia en El Salvador." />
     <meta property="og:title" content="Riego Inteligente El Salvador" />
-    <meta property="og:description" content="Aplicación para pequeños agricultores y huertas escolares que asesora sobre el riego según el pronóstico de lluvia en municipios de El Salvador." />
+    <meta property="og:description" content="Aplicación web móvil para pequeños agricultores y huertas escolares que asesora sobre el riego según el pronóstico de lluvia en El Salvador." />
     <meta property="og:type" content="website" />
     <meta name="theme-color" content="#15803d" />
+    <meta name="color-scheme" content="light" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <!-- Encabezado de la App -->
+    <!-- Encabezado Fijo y Accesible -->
     <header class="app-header">
       <div class="header-container">
         <div class="brand-wrapper">
@@ -22,7 +23,7 @@
             <p class="brand-subtitle">Huertas y Parcelas de El Salvador 🇸🇻</p>
           </div>
         </div>
-        <span class="header-badge">M2 Persistencia Local</span>
+        <span class="header-badge">M3 Móvil Campo</span>
       </div>
     </header>
 
@@ -30,17 +31,17 @@
     <main class="main-container">
       
       <!-- Contenedor dinámico de alertas y mensajes de confirmación -->
-      <div id="alert-container" style="display: none;"></div>
+      <div id="alert-container" style="display: none;" role="alert" aria-live="assertive"></div>
 
       <!-- PASO 1: Consulta de Pronóstico del Municipio -->
       <section class="card" aria-labelledby="sec1-heading">
         <h2 id="sec1-heading" class="card-title">
-          <span class="step-number">1</span>
+          <span class="step-number" aria-hidden="true">1</span>
           <span>Seleccionar Municipio y Consultar Clima</span>
         </h2>
 
         <div class="form-group">
-          <label for="select-municipio" class="form-label">Municipio o Zona de Cultivo en El Salvador:</label>
+          <label for="select-municipio" class="form-label">Municipio o Zona de Cultivo:</label>
           <select id="select-municipio" class="form-select" aria-describedby="municipio-coords">
             <option value="">Cargando municipios salvadoreños...</option>
           </select>
@@ -51,17 +52,17 @@
           🔍 Consultar Clima y Evaluar Riego
         </button>
 
-        <!-- Indicador de carga -->
+        <!-- Indicador de carga accesible -->
         <div id="loader-wrapper" class="loader-wrapper" role="status" aria-live="polite">
           <div class="spinner"></div>
-          <p style="font-size: 0.85rem; color: var(--color-text-muted);">
+          <p style="font-size: 0.95rem; font-weight: 700; color: var(--color-text-main);">
             Consultando pronóstico en tiempo real...
           </p>
         </div>
 
         <!-- Configuración de Proveedor de Clima (Colapsable) -->
         <button id="toggle-config" type="button" class="collapsible-toggle" aria-expanded="false">
-          <span>⚙️ Opciones de Servicio Meteorológico (Open-Meteo / OpenWeatherMap)</span>
+          <span>⚙️ Opciones de Servicio Meteorológico</span>
           <span aria-hidden="true">▾</span>
         </button>
 
@@ -101,35 +102,35 @@
       <!-- PASO 2: Estado del Clima Actual y Recomendación de Riego -->
       <section id="card-recomendacion" class="card" style="display: none;" aria-labelledby="sec2-heading">
         <h2 id="sec2-heading" class="card-title">
-          <span class="step-number">2</span>
+          <span class="step-number" aria-hidden="true">2</span>
           <span>Estado del Clima y Decisión de Riego</span>
         </h2>
 
-        <!-- SUGERENCIA FINAL (BANNER PRINCIPAL) -->
+        <!-- SUGERENCIA FINAL (BANNER PRINCIPAL DE ALTO CONTRASTE) -->
         <div id="recommendation-banner" class="recommendation-banner">
           <!-- Generado dinámicamente: NO REGAR o REGAR -->
         </div>
 
         <!-- Regla de decisión aplicada visible para transparencia -->
         <div class="rule-indicator-box">
-          <span class="rule-icon">⚖️</span>
+          <span class="rule-icon" aria-hidden="true">⚖️</span>
           <div class="rule-content">
             <strong class="rule-title">Regla de Decisión (M1):</strong>
-            <p class="rule-desc">
+            <span class="rule-desc">
               Si la probabilidad de lluvia es &gt; 50% o la precipitación prevista es &gt; 2 mm ➔ <strong>NO REGAR</strong>. De lo contrario ➔ <strong>REGAR</strong>.
-            </p>
+            </span>
           </div>
         </div>
 
         <!-- Justificación agronómica correspondiente -->
         <div class="motivo-box">
-          <div class="motivo-label">Justificación basada en el pronóstico:</div>
+          <div class="motivo-label">Justificación agronómica:</div>
           <p id="rec-motivo-text" class="motivo-text"></p>
         </div>
 
         <!-- ESTADO DETALLADO DEL CLIMA ACTUAL -->
         <div class="weather-summary-header">
-          <span class="weather-section-title">📊 Clima Reportado Hoy en <span id="val-municipio-nombre">--</span></span>
+          <span class="weather-section-title">📊 Clima Hoy en <span id="val-municipio-nombre">--</span></span>
           <span id="val-condicion-badge" class="weather-cond-badge">--</span>
         </div>
 
@@ -147,19 +148,19 @@
           <div class="metric-item" id="metric-temperatura-card">
             <span class="metric-title">Temperatura Actual</span>
             <span id="val-temperatura" class="metric-value">--°C</span>
-            <span id="val-temp-minmax" class="metric-sub">Min / Max del día</span>
+            <span id="val-temp-minmax" class="metric-sub">Min / Max</span>
           </div>
-          <div class="metric-item">
+          <div class="metric-item" id="metric-humedad-card">
             <span class="metric-title">Humedad Relativa</span>
             <span id="val-humedad" class="metric-value">--%</span>
             <span id="val-fuente-api" class="metric-sub">Fuente: Open-Meteo</span>
           </div>
         </div>
 
-        <!-- Registro de decisión en el historial (M2) -->
+        <!-- Registro de decisión en el historial (M2 / M3) -->
         <div class="log-action-panel">
           <div class="log-action-title">
-            <span>📝 Guardar decisión en el Historial de la Huerta (localStorage):</span>
+            <span>📝 Guardar decisión en el Historial de la Huerta:</span>
           </div>
           <div class="action-buttons-row">
             <button id="btn-log-no" class="btn btn-decision-no" type="button">
@@ -169,18 +170,18 @@
               💧 Registrar Decisión: REGAR
             </button>
           </div>
-          <p class="form-help" style="margin-top: 8px;">
-            Al registrar, se guardará en tu navegador con la fecha, hora, municipio y clima reportado.
+          <p class="form-help" style="margin-top: 10px;">
+            Al registrar, se guardará en tu teléfono con la fecha, hora, municipio y clima reportado.
           </p>
         </div>
       </section>
 
-      <!-- PASO 3: Historial de Decisiones Tomadas (M2) -->
+      <!-- PASO 3: Historial de Decisiones Tomadas (M2 / M3) -->
       <section class="card" aria-labelledby="sec3-heading">
         <div class="history-header">
           <div class="history-title-wrapper">
             <h2 id="sec3-heading" class="card-title" style="margin-bottom: 0;">
-              <span class="step-number">3</span>
+              <span class="step-number" aria-hidden="true">3</span>
               <span>Historial de Decisiones</span>
             </h2>
             <span id="history-count-badge" class="history-count-badge" title="Cantidad de registros guardados">0 guardadas</span>
@@ -191,11 +192,11 @@
         </div>
 
         <p class="history-subtitle">
-          Los registros se conservan de forma permanente en este dispositivo mediante almacenamiento local (localStorage).
+          Los registros se conservan de forma permanente en este dispositivo móvil (localStorage).
         </p>
 
         <div id="history-container">
-          <!-- Generado dinámicamente desde localStorage al cargar la página -->
+          <!-- Generado dinámicamente con Empty State ilustrado o lista de tarjetas -->
         </div>
       </section>
 

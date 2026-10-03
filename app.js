@@ -1,15 +1,13 @@
 /**
  * ============================================================================
  * RIEGO INTELIGENTE - EL SALVADOR
- * Lógica de Negocio y Persistencia en LocalStorage (M1 + M2)
+ * M1 + M2 + M3: Lógica de Decisión, Persistencia Local y Experiencia Móvil
  * 
- * Requisitos de Persistencia (M2):
- * 1. Almacenamiento local utilizando localStorage.
- * 2. Cada registro guarda: fecha y hora, municipio, clima reportado y decisión (REGAR o NO REGAR).
- * 3. Persistencia intacta al recargar la página.
- * 4. Opción para vaciar o borrar el historial completo.
- * 
- * Código en JavaScript Vanilla (Sin librerías externas)
+ * Requisitos M3:
+ * 1. 100% Responsive y Mobile-First.
+ * 2. Tarjetas claras con alto contraste y botones táctiles grandes (>= 48px).
+ * 3. Lista de historial sin desbordes horizontales para pantallas estrechas.
+ * 4. Empty State visual amigable con ilustración orientadora.
  * ============================================================================
  */
 
@@ -125,16 +123,14 @@ const App = {
 
   // ==========================================================================
   // INICIALIZACIÓN DE LA APLICACIÓN
-  // Carga inmediatamente el historial guardado en localStorage
+  // Carga inmediatamente el historial guardado en localStorage (M2 + M3)
   // ==========================================================================
   init: function() {
     this.poblarSelectorMunicipios();
     this.vincularEventos();
-    // REQUISITO M2: Cargar el historial desde localStorage al iniciar o recargar
     this.cargarHistorial();
     this.actualizarEstadoUIConfig();
 
-    // Seleccionar por defecto el primer municipio
     const select = document.getElementById('select-municipio');
     if (select && select.options.length > 1) {
       select.selectedIndex = 1;
@@ -206,14 +202,14 @@ const App = {
         this.state.owmApiKey = key;
         try {
           localStorage.setItem('riego_owm_key', key);
-          this.mostrarMensaje('Clave de OpenWeatherMap guardada en el navegador.', 'info');
+          this.mostrarMensaje('Clave de OpenWeatherMap guardada en tu teléfono.', 'info');
         } catch (e) {
           console.warn('No se pudo guardar la clave en localStorage', e);
         }
       });
     }
 
-    // REQUISITO M2: Registrar decisión tomada ("NO REGAR" o "REGAR")
+    // Botones táctiles grandes para registrar decisión (M2/M3)
     const btnLogNo = document.getElementById('btn-log-no');
     const btnLogSi = document.getElementById('btn-log-si');
     if (btnLogNo) {
@@ -223,7 +219,7 @@ const App = {
       btnLogSi.addEventListener('click', () => this.guardarDecision('REGAR'));
     }
 
-    // REQUISITO M2: Vaciar historial completo
+    // Botón para vaciar historial completo
     const btnLimpiarHistorial = document.getElementById('btn-limpiar-historial');
     if (btnLimpiarHistorial) {
       btnLimpiarHistorial.addEventListener('click', () => this.limpiarHistorial());
@@ -305,7 +301,7 @@ const App = {
         this.crearBotonFallbackOpenMeteo();
       } else {
         this.mostrarMensaje(
-          `No se pudo obtener el pronóstico de Open-Meteo: ${error.message}. Verifica tu conexión a internet e intenta nuevamente.`,
+          `No se pudo obtener el pronóstico de Open-Meteo: ${error.message}. Verifica la señal de internet en tu teléfono.`,
           'danger'
         );
       }
@@ -324,7 +320,7 @@ const App = {
     try {
       response = await fetch(url);
     } catch (e) {
-      throw new Error('Fallo de red al conectar con Open-Meteo. Revisa tu conexión.');
+      throw new Error('Fallo de red al conectar con Open-Meteo. Revisa tu conexión de datos.');
     }
 
     if (!response.ok) {
@@ -592,13 +588,9 @@ const App = {
   },
 
   // ==========================================================================
-  // TAREA (M2): PERSISTENCIA Y ALMACENAMIENTO LOCAL EN LOCALSTORAGE
+  // PERSISTENCIA Y RENDERIZADO DEL HISTORIAL (M2 + M3)
   // ==========================================================================
 
-  /**
-   * Obtiene el array de registros desde localStorage de manera segura.
-   * Maneja errores en caso de cookies bloqueadas o navegación privada.
-   */
   obtenerHistorialStorage: function() {
     try {
       const data = localStorage.getItem(STORAGE_KEY);
@@ -611,21 +603,11 @@ const App = {
     }
   },
 
-  /**
-   * Carga y renderiza el historial existente al iniciar o recargar la página.
-   * Garantiza que ningún registro previo se pierda.
-   */
   cargarHistorial: function() {
     const historial = this.obtenerHistorialStorage();
     this.renderizarHistorial(historial);
   },
 
-  /**
-   * Guarda un nuevo registro de decisión en localStorage.
-   * Requisito M2: Guarda fecha/hora, municipio, clima reportado y decisión (REGAR o NO REGAR).
-   * 
-   * @param {'REGAR' | 'NO REGAR'} decisionTomada
-   */
   guardarDecision: function(decisionTomada) {
     if (!this.state.lastRecommendation) {
       this.mostrarMensaje('Primero consulta el clima de un municipio antes de registrar tu decisión.', 'warning');
@@ -634,7 +616,6 @@ const App = {
 
     const rec = this.state.lastRecommendation;
 
-    // Formatear fecha y hora local de El Salvador
     const ahora = new Date();
     const fechaHoraFormateada = ahora.toLocaleString('es-SV', {
       day: '2-digit',
@@ -646,45 +627,34 @@ const App = {
       hour12: true
     });
 
-    // Estructura completa requerida por M2
     const nuevoRegistro = {
       id: 'reg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       fechaHora: fechaHoraFormateada,
       timestamp: ahora.getTime(),
       municipio: rec.municipio,
-      // Clima reportado al momento de la toma de decisión
       climaReportado: {
         temperatura: rec.temp,
         probLluvia: rec.probLluvia,
         precipitacionMm: rec.precipitacionMm,
         condicion: rec.condicion,
         humedad: rec.humedad,
-        resumenTexto: `${rec.temp}°C | Prob. lluvia: ${rec.probLluvia}% | Precipitación: ${rec.precipitacionMm} mm (${rec.condicion})`
       },
-      // Decisión tomada explícitamente: 'REGAR' o 'NO REGAR'
       decisionTomada: decisionTomada,
-      // Recomendación previa sugerida por la regla del sistema
       sugerenciaSistema: rec.veredicto
     };
 
-    // Obtener historial previo
     let historial = this.obtenerHistorialStorage();
-
-    // Insertar al inicio de la lista (orden cronológico descendente)
     historial.unshift(nuevoRegistro);
 
-    // Limitar a los últimos 50 registros para optimizar el almacenamiento
     if (historial.length > 50) {
       historial = historial.slice(0, 50);
     }
 
-    // Persistir en localStorage
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(historial));
       this.renderizarHistorial(historial);
-      this.mostrarMensaje(`✅ Decisión "${decisionTomada}" guardada en el historial con fecha y clima.`, 'info');
+      this.mostrarMensaje(`✅ Decisión "${decisionTomada}" guardada en tu teléfono.`, 'info');
 
-      // Desplazar suavemente hacia el historial para confirmar visualmente
       const historySection = document.getElementById('history-container');
       if (historySection) {
         historySection.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -695,9 +665,6 @@ const App = {
     }
   },
 
-  /**
-   * Borra o vacía completamente el historial almacenado en localStorage.
-   */
   limpiarHistorial: function() {
     const historial = this.obtenerHistorialStorage();
     if (historial.length === 0) {
@@ -718,9 +685,6 @@ const App = {
     }
   },
 
-  /**
-   * Permite eliminar un registro individual del historial.
-   */
   eliminarRegistroHistorial: function(id) {
     let historial = this.obtenerHistorialStorage();
     historial = historial.filter(item => item.id !== id);
@@ -735,54 +699,65 @@ const App = {
   },
 
   /**
-   * Renderiza el listado visual del historial en pantalla.
+   * Renderiza el listado visual del historial en pantalla (M3)
+   * - Mobile-First, sin desbordes horizontales
+   * - Empty state ilustrado cuando no hay registros
    */
   renderizarHistorial: function(historial) {
     const contenedor = document.getElementById('history-container');
     const badgeCount = document.getElementById('history-count-badge');
     if (!contenedor) return;
 
-    // Actualizar contador del encabezado
     if (badgeCount) {
-      badgeCount.textContent = `${historial.length} ${historial.length === 1 ? 'registro' : 'registros'}`;
+      badgeCount.textContent = `${historial.length} ${historial.length === 1 ? 'guardada' : 'guardadas'}`;
     }
 
-    // Estado vacío
+    // ESTADO VACÍO (EMPTY STATE M3): Ilustración SVG limpia y mensaje orientador
     if (!historial || historial.length === 0) {
       contenedor.innerHTML = `
-        <div class="history-empty">
-          <p style="font-size: 1.1rem; font-weight: 700; margin-bottom: 6px;">🌱 No hay decisiones registradas aún</p>
-          <p>Consulta el clima de tu municipio y presiona <strong>"Registrar Decisión: NO REGAR"</strong> o <strong>"Registrar Decisión: REGAR"</strong>.</p>
-          <p style="font-size: 0.76rem; margin-top: 8px; color: var(--color-text-muted);">
-            Tus registros se guardarán automáticamente en tu navegador y podrás consultarlos cada vez que vuelvas a abrir la app.
+        <div class="history-empty-container">
+          <svg class="empty-illustration-svg" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="60" cy="60" r="54" fill="#f0fdf4" stroke="#bbf7d0" stroke-width="2"/>
+            <path d="M25 88C35 84 50 86 60 85C75 84 90 87 95 88C95 94 85 98 60 98C35 98 25 94 25 88Z" fill="#854d0e" opacity="0.3"/>
+            <path d="M60 85V48" stroke="#16a34a" stroke-width="4" stroke-linecap="round"/>
+            <path d="M60 62C50 56 42 62 40 68C48 70 56 68 60 62Z" fill="#22c55e" stroke="#15803d" stroke-width="1.5"/>
+            <path d="M60 52C70 46 78 52 80 58C72 60 64 58 60 52Z" fill="#16a34a" stroke="#15803d" stroke-width="1.5"/>
+            <circle cx="60" cy="45" r="4" fill="#4ade80"/>
+            <circle cx="34" cy="34" r="10" fill="#facc15" stroke="#eab308" stroke-width="1.5"/>
+            <path d="M84 32C84 32 90 40 90 43C90 46.3 87.3 49 84 49C80.7 49 78 46.3 78 43C78 40 84 32 84 32Z" fill="#38bdf8" stroke="#0284c7" stroke-width="1.5"/>
+          </svg>
+          <h3 class="empty-title">Tu registro de huerta está listo</h3>
+          <p class="empty-description">
+            Aún no has guardado decisiones de riego hoy. Cuando consultes el clima de tu municipio y elijas una acción, tu registro aparecerá aquí.
           </p>
+          <div class="empty-hint">
+            <span>☝️</span> Selecciona tu municipio arriba y presiona "Consultar Clima"
+          </div>
         </div>
       `;
       return;
     }
 
-    // Construcción de la lista
+    // LISTADO RESPONSIVE SIN DESBORDE HORIZONTAL (M3)
     let html = '<div class="history-list">';
     historial.forEach(item => {
       const esNo = item.decisionTomada === 'NO REGAR';
       const claseBadge = esNo ? 'no' : 'si';
       const textoBadge = esNo ? '🛑 DECISIÓN: NO REGAR' : '💧 DECISIÓN: REGAR';
 
-      // Datos del clima reportado
       const clima = item.climaReportado || {};
       const tempStr = (clima.temperatura !== undefined) ? `${clima.temperatura}°C` : '--°C';
       const probStr = (clima.probLluvia !== undefined) ? `${clima.probLluvia}%` : '--%';
       const lluviaStr = (clima.precipitacionMm !== undefined) ? `${clima.precipitacionMm} mm` : '-- mm';
       const condStr = clima.condicion || 'Cielo variable';
 
-      // Coincidencia con la recomendación del sistema
       const coincidio = item.sugerenciaSistema ? (item.decisionTomada === item.sugerenciaSistema) : null;
       const coincidenciaTxt = coincidio === true 
         ? '✓ Coincidió con la sugerencia técnica' 
-        : (coincidio === false ? 'ℹ️ Se tomó una decisión distinta a la sugerencia' : '');
+        : (coincidio === false ? 'ℹ️ Decisión manual del agricultor' : '');
 
       html += `
-        <div class="history-item">
+        <article class="history-item">
           <div class="history-item-top">
             <span class="history-place">📍 ${this.escaparHtml(item.municipio)}</span>
             <span class="history-badge ${claseBadge}">${textoBadge}</span>
@@ -792,21 +767,29 @@ const App = {
             <span>📅 <strong>Fecha y Hora:</strong> ${this.escaparHtml(item.fechaHora || '--')}</span>
           </div>
 
-          <!-- Clima reportado en el momento de la decisión -->
-          <div class="history-weather-box" title="Clima reportado en este registro">
-            <span>🌡️ Temp: <strong>${tempStr}</strong></span>
-            <span>🌧️ Prob. Lluvia: <strong>${probStr}</strong></span>
-            <span>💧 Precipitación: <strong>${lluviaStr}</strong></span>
-            <span>${this.escaparHtml(condStr)}</span>
+          <!-- Cuadrícula 2x2 que se adapta limpiamente sin desbordar -->
+          <div class="history-weather-box" aria-label="Condiciones climáticas registradas">
+            <div class="history-weather-item">
+              <span>🌡️ Temp:</span> <strong>${tempStr}</strong>
+            </div>
+            <div class="history-weather-item">
+              <span>🌧️ Lluvia:</span> <strong>${probStr}</strong>
+            </div>
+            <div class="history-weather-item">
+              <span>💧 Volumen:</span> <strong>${lluviaStr}</strong>
+            </div>
+            <div class="history-weather-item">
+              <span>🌤️ Estado:</span> <strong>${this.escaparHtml(condStr)}</strong>
+            </div>
           </div>
 
           <div class="history-footer">
             <span class="history-system-match">${this.escaparHtml(coincidenciaTxt)}</span>
             <button class="btn btn-sm btn-danger-outline" onclick="App.eliminarRegistroHistorial('${item.id}')" title="Eliminar este registro">
-              🗑️ Borrar
+              🗑️ Borrar registro
             </button>
           </div>
-        </div>
+        </article>
       `;
     });
     html += '</div>';
@@ -838,7 +821,6 @@ const App = {
     `;
     contenedor.style.display = 'block';
 
-    // Auto-ocultar mensajes informativos después de 4 segundos
     if (tipo === 'info') {
       setTimeout(() => {
         this.ocultarMensaje();
@@ -898,5 +880,4 @@ if (document.readyState === 'loading') {
   App.init();
 }
 
-// Exponer en window para acciones de botones
 window.App = App;

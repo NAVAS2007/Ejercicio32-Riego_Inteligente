@@ -1,41 +1,63 @@
 /* ==========================================================================
    RIEGO INTELIGENTE - EL SALVADOR
-   Hoja de estilos vanilla CSS moderna, accesible y optimizada para móviles
+   M3: Hoja de estilos Mobile-First de Alto Contraste para Luz Solar y Campo
    ========================================================================== */
 
 :root {
-  --color-primary: #15803d;         /* Verde agrícola profundo */
-  --color-primary-hover: #166534;
-  --color-primary-light: #dcfce7;
-  --color-bg: #f8fafc;              /* Fondo suave */
-  --color-surface: #ffffff;         /* Superficie de tarjetas */
-  --color-surface-alt: #f1f5f9;
-  --color-border: #e2e8f0;
-  --color-text-main: #0f172a;       /* Alto contraste para legibilidad en campo */
-  --color-text-muted: #475569;
-  --color-danger: #dc2626;          /* NO REGAR */
+  /* Paleta de alto contraste para visibilidad bajo luz solar directa (WCAG AAA) */
+  --color-primary: #15803d;           /* Verde campo profundo */
+  --color-primary-hover: #14532d;
+  --color-primary-bg: #ecfdf5;
+  --color-primary-border: #86efac;
+  
+  --color-bg: #f1f5f9;                /* Fondo sutil */
+  --color-surface: #ffffff;           /* Superficie blanca pura para alto contraste */
+  --color-surface-subtle: #f8fafc;
+  --color-surface-accent: #f1f5f9;
+  
+  --color-text-main: #090d16;         /* Negro casi puro para máxima legibilidad al sol */
+  --color-text-muted: #334155;        /* Gris oscuro de alto contraste */
+  --color-text-light: #64748b;
+  
+  --color-border: #cbd5e1;            /* Bordes marcados para delimitar bajo el sol */
+  --color-border-focus: #15803d;
+  
+  /* Estados de decisión de riego */
+  --color-danger-text: #7f1d1d;       /* Rojo ultra contrastado */
   --color-danger-bg: #fef2f2;
-  --color-danger-border: #fecaca;
-  --color-success: #16a34a;         /* REGAR */
+  --color-danger-border: #ef4444;
+  --color-danger-btn-bg: #fee2e2;
+  --color-danger-btn-hover: #fecaca;
+  
+  --color-success-text: #14532d;      /* Verde ultra contrastado */
   --color-success-bg: #f0fdf4;
-  --color-success-border: #bbf7d0;
-  --color-warning: #d97706;
-  --color-warning-bg: #fffbeb;
-  --color-warning-border: #fde68a;
+  --color-success-border: #22c55e;
+  --color-success-btn-bg: #dcfce7;
+  --color-success-btn-hover: #bbf7d0;
+
+  --color-info-text: #0c4a6e;
   --color-info-bg: #f0f9ff;
-  --color-info-border: #bae6fd;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
+  --color-info-border: #38bdf8;
+  
   --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --shadow-card: 0 2px 4px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
+/* Reseteo Mobile-First */
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -47,16 +69,21 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow-x: hidden;
+  width: 100%;
 }
 
-/* Encabezado accesible */
+/* ==========================================================================
+   ENCABEZADO FIJO Y ACCESIBLE
+   ========================================================================== */
 .app-header {
   background-color: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  padding: 16px 20px;
+  border-bottom: 2px solid var(--color-border);
+  padding: 12px 16px;
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 50;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .header-container {
@@ -65,83 +92,102 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
 }
 
 .brand-wrapper {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  min-width: 0;
 }
 
 .brand-icon {
-  font-size: 28px;
+  font-size: 32px;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .brand-title {
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--color-primary);
   line-height: 1.2;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .brand-subtitle {
-  font-size: 0.825rem;
+  font-size: 0.78rem;
+  font-weight: 600;
   color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .header-badge {
   font-size: 0.75rem;
-  font-weight: 700;
-  color: var(--color-primary);
-  background: var(--color-primary-light);
-  padding: 4px 8px;
+  font-weight: 800;
+  color: var(--color-primary-hover);
+  background-color: var(--color-primary-bg);
+  padding: 6px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid #bbf7d0;
+  border: 1.5px solid var(--color-primary-border);
+  flex-shrink: 0;
 }
 
-/* Contenedor principal centrado en móvil */
+/* ==========================================================================
+   CONTENEDOR PRINCIPAL FLUIDO (MOBILE-FIRST)
+   ========================================================================== */
 .main-container {
-  max-width: 680px;
   width: 100%;
+  max-width: 680px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 14px 14px 28px 14px;
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-/* Tarjeta base */
+/* ==========================================================================
+   TARJETAS CLARAS CON ALTO CONTRASTE (OPTIMIZADAS PARA SOL)
+   ========================================================================== */
 .card {
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
+  border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 16px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-card);
+  width: 100%;
 }
 
 .card-title {
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 800;
   margin-bottom: 12px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   color: var(--color-text-main);
+  line-height: 1.3;
 }
 
 .card-title span.step-number {
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  width: 24px;
-  height: 24px;
+  background: var(--color-primary);
+  color: #ffffff;
+  width: 28px;
+  height: 28px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-size: 0.8rem;
-  font-weight: 800;
+  font-size: 0.85rem;
+  font-weight: 900;
+  flex-shrink: 0;
 }
 
 /* Formulario y Controles */
@@ -153,27 +199,30 @@ body {
 }
 
 .form-label {
-  font-size: 0.875rem;
-  font-weight: 600;
+  font-size: 0.92rem;
+  font-weight: 700;
   color: var(--color-text-main);
 }
 
 .form-help {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   color: var(--color-text-muted);
   line-height: 1.4;
+  word-break: break-word;
 }
 
+/* Inputs y Selects táctiles grandes (mínimo 48px de altura) */
 .form-select,
 .form-input {
   width: 100%;
-  min-height: 46px; /* Tamaño táctil móvil mínimo de 44px+ */
-  padding: 10px 14px;
-  font-size: 0.95rem;
+  min-height: 50px;
+  padding: 12px 14px;
+  font-size: 1rem;
+  font-weight: 600;
   font-family: inherit;
   color: var(--color-text-main);
   background-color: var(--color-surface);
-  border: 1.5px solid var(--color-border);
+  border: 2px solid var(--color-border);
   border-radius: var(--radius-sm);
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -181,36 +230,42 @@ body {
 
 .form-select:focus,
 .form-input:focus {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.15);
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.2);
 }
 
-/* Botón principal táctil */
+/* ==========================================================================
+   BOTONES CON ÁREAS DE TOQUE GRANDES (MÍNIMO 48PX DE ALTURA)
+   ========================================================================== */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 48px;
+  min-height: 52px;                 /* Supera el estándar de 48px para campo */
   width: 100%;
-  padding: 12px 18px;
-  font-size: 1rem;
-  font-weight: 600;
+  padding: 14px 18px;
+  font-size: 1.05rem;
+  font-weight: 800;
   font-family: inherit;
   border-radius: var(--radius-sm);
-  border: none;
+  border: 2px solid transparent;
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
+  text-align: center;
+  touch-action: manipulation;
 }
 
 .btn:active {
-  transform: scale(0.985);
+  transform: scale(0.98);
 }
 
 .btn-primary {
   background-color: var(--color-primary);
   color: #ffffff;
+  border-color: var(--color-primary);
+  box-shadow: 0 2px 4px rgba(21, 128, 61, 0.25);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -223,71 +278,77 @@ body {
 }
 
 .btn-secondary {
-  background-color: var(--color-surface-alt);
+  background-color: var(--color-surface-subtle);
   color: var(--color-text-main);
-  border: 1px solid var(--color-border);
+  border-color: var(--color-border);
 }
 
 .btn-secondary:hover {
   background-color: #e2e8f0;
 }
 
+/* Botones específicos de decisión (grandes y de alto contraste) */
+.btn-decision-no {
+  background-color: var(--color-danger-btn-bg);
+  color: var(--color-danger-text);
+  border: 2px solid var(--color-danger-border);
+  min-height: 52px;
+}
+
+.btn-decision-no:hover,
+.btn-decision-no:active {
+  background-color: var(--color-danger-btn-hover);
+}
+
+.btn-decision-si {
+  background-color: var(--color-success-btn-bg);
+  color: var(--color-success-text);
+  border: 2px solid var(--color-success-border);
+  min-height: 52px;
+}
+
+.btn-decision-si:hover,
+.btn-decision-si:active {
+  background-color: var(--color-success-btn-hover);
+}
+
+/* Botón secundario compacto pero táctil (mínimo 44px) */
 .btn-sm {
-  min-height: 36px;
-  padding: 6px 12px;
-  font-size: 0.85rem;
+  min-height: 44px;
+  padding: 8px 14px;
+  font-size: 0.9rem;
   width: auto;
 }
 
 .btn-danger-outline {
-  background: transparent;
-  color: var(--color-danger);
-  border: 1px solid var(--color-danger-border);
-  font-weight: 600;
-}
-
-.btn-danger-outline:hover {
-  background-color: var(--color-danger-bg);
-}
-
-/* Botones específicos de registro de decisión (M2) */
-.btn-decision-no {
-  background-color: #fff1f2;
+  background-color: #ffffff;
   color: #991b1b;
-  border: 1.5px solid #fecdd3;
+  border: 2px solid #fca5a5;
   font-weight: 700;
 }
 
-.btn-decision-no:hover {
-  background-color: #ffe4e6;
-  border-color: #f43f5e;
+.btn-danger-outline:hover,
+.btn-danger-outline:active {
+  background-color: #fee2e2;
+  border-color: #ef4444;
 }
 
-.btn-decision-si {
-  background-color: #f0fdf4;
-  color: #166534;
-  border: 1.5px solid #bbf7d0;
-  font-weight: 700;
-}
-
-.btn-decision-si:hover {
-  background-color: #dcfce7;
-  border-color: #22c55e;
-}
-
-/* Configuración de API colapsable */
+/* ==========================================================================
+   CONFIGURACIÓN DESPLEGABLE
+   ========================================================================== */
 .collapsible-toggle {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  min-height: 48px;
   background: none;
   border: none;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.88rem;
+  font-weight: 700;
   color: var(--color-text-muted);
   cursor: pointer;
-  padding: 8px 0 0 0;
+  padding: 10px 4px;
   text-align: left;
 }
 
@@ -297,74 +358,70 @@ body {
 
 .api-config-panel {
   display: none;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--color-border);
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 2px dashed var(--color-border);
 }
 
 .api-config-panel.open {
   display: block;
 }
 
-/* Mensajes de Alerta y Notificación */
+/* ==========================================================================
+   ALERTAS Y MENSAJES ACCESIBLES
+   ========================================================================== */
 .alert {
-  padding: 12px 14px;
+  padding: 14px;
   border-radius: var(--radius-sm);
-  font-size: 0.875rem;
-  line-height: 1.4;
+  font-size: 0.92rem;
+  line-height: 1.45;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: flex-start;
-  margin-bottom: 12px;
-  animation: fadeIn 0.2s ease;
+  margin-bottom: 14px;
+  font-weight: 600;
+  word-break: break-word;
 }
 
 .alert-danger {
   background-color: var(--color-danger-bg);
-  border: 1px solid var(--color-danger-border);
-  color: #991b1b;
+  border: 2px solid var(--color-danger-border);
+  color: var(--color-danger-text);
 }
 
 .alert-info {
   background-color: var(--color-info-bg);
-  border: 1px solid var(--color-info-border);
-  color: #0369a1;
+  border: 2px solid var(--color-info-border);
+  color: var(--color-info-text);
 }
 
 .alert-warning {
   background-color: var(--color-warning-bg);
-  border: 1px solid var(--color-warning-border);
-  color: #92400e;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  border: 2px solid var(--color-warning-border);
+  color: #78350f;
 }
 
 /* ==========================================================================
-   SECCIÓN 2: ESTADO DEL CLIMA Y DECISIÓN DE RIEGO (M1 / M2)
+   SECCIÓN 2: BANNER Y DECISIÓN DE RIEGO (ALTO CONTRASTE AL AIRE LIBRE)
    ========================================================================== */
-
 .recommendation-banner {
   border-radius: var(--radius-md);
-  padding: 20px 16px;
+  padding: 22px 14px;
   text-align: center;
-  border: 2.5px solid transparent;
+  border: 3px solid transparent;
   margin-bottom: 14px;
-  transition: all 0.2s ease;
 }
 
 .recommendation-banner.no-regar {
   background-color: var(--color-danger-bg);
-  border-color: #f87171;
-  color: #991b1b;
+  border-color: var(--color-danger-border);
+  color: var(--color-danger-text);
 }
 
 .recommendation-banner.si-regar {
   background-color: var(--color-success-bg);
-  border-color: #4ade80;
-  color: #166534;
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
 }
 
 .rec-verdict {
@@ -372,78 +429,85 @@ body {
   font-weight: 900;
   letter-spacing: -0.02em;
   line-height: 1.1;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .rec-summary {
   font-size: 1.05rem;
-  font-weight: 600;
-  max-width: 500px;
+  font-weight: 700;
+  max-width: 480px;
   margin: 0 auto;
+  line-height: 1.4;
 }
 
-/* Indicador de regla de negocio */
+/* Indicador de regla aplicada */
 .rule-indicator-box {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  background-color: #f8fafc;
-  border: 1px solid var(--color-border);
+  background-color: var(--color-surface-subtle);
+  border: 2px solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 12px;
   margin-bottom: 14px;
-  font-size: 0.825rem;
-  color: var(--color-text-muted);
+  font-size: 0.85rem;
 }
 
 .rule-icon {
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .rule-title {
   color: var(--color-text-main);
   display: inline-block;
   margin-right: 4px;
+  font-weight: 800;
 }
 
 .rule-desc {
-  margin: 0;
+  color: var(--color-text-muted);
   line-height: 1.4;
 }
 
-/* Motivo y Justificación */
+/* Motivo agronómico */
 .motivo-box {
-  background: var(--color-surface-alt);
-  border-left: 4px solid var(--color-primary);
+  background: var(--color-surface-subtle);
+  border-left: 5px solid var(--color-primary);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
   padding: 14px;
   margin-bottom: 16px;
+  border-top: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .motivo-box.no-regar {
-  border-left-color: var(--color-danger);
+  border-left-color: #ef4444;
   background-color: #fffaf0;
 }
 
 .motivo-box.si-regar {
-  border-left-color: var(--color-success);
+  border-left-color: #22c55e;
   background-color: #f6fef9;
 }
 
 .motivo-label {
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  font-weight: 800;
+  font-weight: 900;
   color: var(--color-text-muted);
   margin-bottom: 6px;
 }
 
 .motivo-text {
-  font-size: 0.96rem;
+  font-size: 1rem;
+  font-weight: 600;
   color: var(--color-text-main);
   line-height: 1.5;
+  word-break: break-word;
 }
 
 /* Encabezado del estado meteorológico */
@@ -451,29 +515,30 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 10px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--color-border);
 }
 
 .weather-section-title {
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 800;
   color: var(--color-text-main);
 }
 
 .weather-cond-badge {
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: 0.85rem;
+  font-weight: 700;
   color: var(--color-text-main);
-  background: var(--color-surface-alt);
-  padding: 3px 8px;
+  background: var(--color-surface-accent);
+  padding: 4px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
+  border: 1.5px solid var(--color-border);
 }
 
-/* Grilla de datos climáticos */
+/* Grilla métricas meteorológicas */
 .weather-metrics-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -482,41 +547,41 @@ body {
 }
 
 .metric-item {
-  background: var(--color-surface-alt);
+  background: var(--color-surface-subtle);
   padding: 12px;
   border-radius: var(--radius-sm);
   display: flex;
   flex-direction: column;
-  border: 1px solid transparent;
-  transition: all 0.15s ease;
+  border: 2px solid var(--color-border);
 }
 
 .metric-item.metric-triggered {
-  border-color: #fca5a5;
+  border-color: #f87171;
   background-color: #fff5f5;
 }
 
 .metric-item.metric-safe {
-  border-color: #bbf7d0;
+  border-color: #86efac;
   background-color: #f0fdf4;
 }
 
 .metric-title {
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   color: var(--color-text-muted);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .metric-value {
-  font-size: 1.35rem;
-  font-weight: 800;
+  font-size: 1.45rem;
+  font-weight: 900;
   color: var(--color-text-main);
-  margin: 2px 0;
+  margin: 3px 0;
+  letter-spacing: -0.01em;
 }
 
 .metric-sub {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.78rem;
+  font-weight: 700;
   color: var(--color-text-muted);
 }
 
@@ -528,40 +593,38 @@ body {
   color: #15803d;
 }
 
-/* Registro de acción rápida */
+/* Panel de registro rápido */
 .log-action-panel {
-  background: #f8fafc;
-  border: 1px dashed var(--color-border);
+  background: var(--color-surface-subtle);
+  border: 2px dashed var(--color-border);
   border-radius: var(--radius-sm);
   padding: 14px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .log-action-title {
-  font-size: 0.875rem;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 800;
   color: var(--color-text-main);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .action-buttons-row {
   display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
-.action-buttons-row .btn {
-  flex: 1;
-}
-
 /* ==========================================================================
-   SECCIÓN 3: HISTORIAL DE DECISIONES CON LOCALSTORAGE (M2)
+   SECCIÓN 3: HISTORIAL DE DECISIONES (SIN DESBORDE HORIZONTAL)
    ========================================================================== */
 .history-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 10px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .history-title-wrapper {
@@ -572,139 +635,204 @@ body {
 }
 
 .history-count-badge {
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.8rem;
+  font-weight: 800;
   background: #e0f2fe;
   color: #0369a1;
-  padding: 3px 8px;
+  padding: 4px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid #bae6fd;
+  border: 1.5px solid #7dd3fc;
 }
 
 .history-subtitle {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
+  font-weight: 600;
   color: var(--color-text-muted);
   margin-bottom: 14px;
+  line-height: 1.4;
 }
 
 .history-list {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  width: 100%;
 }
 
-.history-empty {
-  text-align: center;
-  padding: 28px 16px;
-  color: var(--color-text-muted);
-  font-size: 0.875rem;
-  border: 1.5px dashed var(--color-border);
-  border-radius: var(--radius-sm);
-  background: #fafafa;
-}
-
+/* Tarjeta individual del historial */
 .history-item {
   background: var(--color-surface);
-  border: 1.5px solid var(--color-border);
+  border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
   padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  box-shadow: var(--shadow-sm);
-  animation: fadeIn 0.25s ease;
-  transition: transform 0.15s ease, border-color 0.15s ease;
-}
-
-.history-item:hover {
-  border-color: #cbd5e1;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;                /* Previene desborde accidental */
 }
 
 .history-item-top {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
   gap: 8px;
+  width: 100%;
 }
 
 .history-place {
   font-weight: 800;
-  font-size: 0.95rem;
+  font-size: 1rem;
   color: var(--color-text-main);
   line-height: 1.3;
+  word-break: break-word;          /* Adaptación limpia a pantallas estrechas */
+  overflow-wrap: anywhere;
 }
 
 /* Badge de la decisión tomada */
 .history-badge {
-  font-size: 0.78rem;
-  font-weight: 800;
-  padding: 4px 10px;
+  font-size: 0.82rem;
+  font-weight: 900;
+  padding: 6px 12px;
   border-radius: var(--radius-sm);
   letter-spacing: 0.02em;
-  white-space: nowrap;
+  display: inline-block;
+  align-self: flex-start;
 }
 
 .history-badge.no {
   background: #fef2f2;
-  color: #991b1b;
-  border: 1.5px solid #fecaca;
+  color: #7f1d1d;
+  border: 2px solid #ef4444;
 }
 
 .history-badge.si {
   background: #f0fdf4;
-  color: #166534;
-  border: 1.5px solid #bbf7d0;
+  color: #14532d;
+  border: 2px solid #22c55e;
 }
 
 /* Fila de fecha y hora */
 .history-datetime {
-  font-size: 0.78rem;
+  font-size: 0.82rem;
+  font-weight: 600;
   color: var(--color-text-muted);
   display: flex;
   align-items: center;
   gap: 6px;
+  word-break: break-word;
 }
 
-/* Bloque del clima reportado */
+/* Bloque del clima reportado (Grid adaptable que nunca desborda) */
 .history-weather-box {
-  background: var(--color-surface-alt);
+  background: var(--color-surface-accent);
+  border: 1.5px solid var(--color-border);
   border-radius: var(--radius-sm);
-  padding: 8px 12px;
-  font-size: 0.8rem;
+  padding: 10px 12px;
+  font-size: 0.85rem;
   color: var(--color-text-main);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 14px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  width: 100%;
 }
 
-.history-weather-box span {
-  display: inline-flex;
+.history-weather-item {
+  display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.history-weather-full {
+  grid-column: 1 / -1;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  padding-top: 4px;
+  border-top: 1px dashed #cbd5e1;
 }
 
 .history-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-top: 4px;
-  padding-top: 6px;
-  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+  border-top: 1.5px solid var(--color-border);
 }
 
 .history-system-match {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
   color: var(--color-text-muted);
+  word-break: break-word;
 }
 
-/* Indicador de carga accesible */
+/* ==========================================================================
+   ESTADO VACÍO (EMPTY STATE) CON ILUSTRACIÓN ORIENTADORA
+   ========================================================================== */
+.history-empty-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 32px 16px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-subtle);
+  width: 100%;
+}
+
+.empty-illustration-svg {
+  width: 120px;
+  height: 120px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+.empty-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--color-text-main);
+  margin-bottom: 8px;
+}
+
+.empty-description {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  max-width: 380px;
+  margin-bottom: 14px;
+}
+
+.empty-hint {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  background-color: var(--color-primary-bg);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--color-primary-border);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Spinner de carga */
 .loader-wrapper {
   display: none;
   padding: 24px;
   text-align: center;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .loader-wrapper.active {
@@ -712,9 +840,9 @@ body {
 }
 
 .spinner {
-  width: 36px;
-  height: 36px;
-  border: 3px solid var(--color-border);
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--color-border);
   border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -729,26 +857,49 @@ body {
 /* Pie de página */
 .app-footer {
   text-align: center;
-  padding: 20px;
-  font-size: 0.78rem;
+  padding: 24px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
   color: var(--color-text-muted);
-  border-top: 1px solid var(--color-border);
+  border-top: 2px solid var(--color-border);
   margin-top: auto;
+  background-color: var(--color-surface);
 }
 
-/* Ajustes responsivos para celulares pequeños */
-@media (max-width: 440px) {
+/* ==========================================================================
+   MEDIA QUERIES PROGRESSIVOS (DESKTOP & PANTALLAS MÁS ANCHAS)
+   ========================================================================== */
+@media (min-width: 480px) {
+  .action-buttons-row {
+    flex-direction: row;
+  }
+  
+  .action-buttons-row .btn {
+    flex: 1;
+  }
+
+  .history-item-top {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .history-badge {
+    align-self: auto;
+  }
+}
+
+@media (max-width: 360px) {
+  /* En teléfonos con pantallas muy angostas (<= 360px) */
   .weather-metrics-grid {
     grid-template-columns: 1fr;
   }
-  .action-buttons-row {
-    flex-direction: column;
+  
+  .history-weather-box {
+    grid-template-columns: 1fr;
   }
+  
   .rec-verdict {
-    font-size: 1.8rem;
-  }
-  .history-item-top {
-    flex-direction: column;
-    align-items: flex-start;
+    font-size: 1.85rem;
   }
 }
