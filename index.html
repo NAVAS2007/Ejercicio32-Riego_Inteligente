@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Riego Inteligente El Salvador</title>
+    <meta name="description" content="Aplicación para pequeños agricultores y huertas escolares que asesora sobre el riego según el pronóstico de lluvia en municipios de El Salvador." />
+    <meta property="og:title" content="Riego Inteligente El Salvador" />
+    <meta property="og:description" content="Aplicación para pequeños agricultores y huertas escolares que asesora sobre el riego según el pronóstico de lluvia en municipios de El Salvador." />
+    <meta property="og:type" content="website" />
+    <meta name="theme-color" content="#15803d" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <!-- Encabezado de la App -->
+    <header class="app-header">
+      <div class="header-container">
+        <div class="brand-wrapper">
+          <span class="brand-icon" aria-hidden="true">🌱</span>
+          <div>
+            <h1 class="brand-title">Riego Inteligente</h1>
+            <p class="brand-subtitle">Huertas y Parcelas de El Salvador 🇸🇻</p>
+          </div>
+        </div>
+        <span class="header-badge">v1.0 Vanilla</span>
+      </div>
+    </header>
+
+    <!-- Contenedor Principal (Mobile-First) -->
+    <main class="main-container">
+      
+      <!-- Contenedor dinámico de alertas y mensajes de error -->
+      <div id="alert-container" style="display: none;"></div>
+
+      <!-- PASO 1: Consulta de Pronóstico del Municipio -->
+      <section class="card" aria-labelledby="sec1-heading">
+        <h2 id="sec1-heading" class="card-title">
+          <span class="step-number">1</span>
+          <span>Consultar Pronóstico Municipal</span>
+        </h2>
+
+        <div class="form-group">
+          <label for="select-municipio" class="form-label">Municipio o Zona de Cultivo:</label>
+          <select id="select-municipio" class="form-select" aria-describedby="municipio-coords">
+            <option value="">Cargando municipios salvadoreños...</option>
+          </select>
+          <div id="municipio-coords" class="form-help"></div>
+        </div>
+
+        <button id="btn-consultar" class="btn btn-primary" type="button">
+          🔍 Consultar Pronóstico y Decidir Riego
+        </button>
+
+        <!-- Indicador de carga -->
+        <div id="loader-wrapper" class="loader-wrapper" role="status" aria-live="polite">
+          <div class="spinner"></div>
+          <p style="font-size: 0.85rem; color: var(--color-text-muted);">
+            Consultando servicio meteorológico para El Salvador...
+          </p>
+        </div>
+
+        <!-- Configuración de Proveedor de Clima (Colapsable) -->
+        <button id="toggle-config" type="button" class="collapsible-toggle" aria-expanded="false">
+          <span>⚙️ Opciones de API meteorológica (Open-Meteo / OpenWeatherMap)</span>
+          <span aria-hidden="true">▾</span>
+        </button>
+
+        <div id="api-config-panel" class="api-config-panel">
+          <div class="form-group">
+            <label for="select-provider" class="form-label">Servicio Meteorológico:</label>
+            <select id="select-provider" class="form-select">
+              <option value="openmeteo">Open-Meteo (API Pública gratuita, sin clave requerida)</option>
+              <option value="openweathermap">OpenWeatherMap (Requiere clave API personal)</option>
+            </select>
+            <p class="form-help">
+              Ambos servicios analizan la probabilidad de lluvia para la tarde en El Salvador.
+            </p>
+          </div>
+
+          <div id="container-owm-key" class="form-group" style="display: none;">
+            <label for="input-owm-key" class="form-label">Tu API Key de OpenWeatherMap:</label>
+            <div style="display: flex; gap: 8px;">
+              <input 
+                type="password" 
+                id="input-owm-key" 
+                class="form-input" 
+                placeholder="Pega aquí tu appid de OpenWeatherMap..." 
+                autocomplete="off"
+              />
+              <button id="btn-guardar-key" class="btn btn-secondary btn-sm" type="button" style="white-space: nowrap;">
+                Guardar Clave
+              </button>
+            </div>
+            <p class="form-help">
+              Se guarda en tu navegador (localStorage). Si no tienes clave, selecciona Open-Meteo arriba.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- PASO 2: Recomendación de Riego (SÍ / NO con Motivo) -->
+      <section id="card-recomendacion" class="card" style="display: none;" aria-labelledby="sec2-heading">
+        <h2 id="sec2-heading" class="card-title">
+          <span class="step-number">2</span>
+          <span>Recomendación de Riego</span>
+        </h2>
+
+        <!-- Banner de Veredicto (SÍ REGAR o NO REGAR) -->
+        <div id="recommendation-banner" class="recommendation-banner">
+          <!-- Generado dinámicamente -->
+        </div>
+
+        <!-- Motivo agronómico detallado -->
+        <div class="motivo-box">
+          <div class="motivo-label">Motivo basado en el pronóstico:</div>
+          <p id="rec-motivo-text" class="motivo-text"></p>
+        </div>
+
+        <!-- Métricas meteorológicas clave para el agricultor -->
+        <div class="weather-metrics-grid">
+          <div class="metric-item">
+            <span class="metric-title">Probabilidad lluvia (Tarde)</span>
+            <span id="val-prob-lluvia" class="metric-value">0%</span>
+            <span class="metric-sub">Entre 12:00 PM y 6:00 PM</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-title">Lluvia estimada</span>
+            <span id="val-lluvia-mm" class="metric-value">0.0 mm</span>
+            <span class="metric-sub">Acumulación pronosticada</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-title">Temperatura ambiental</span>
+            <span id="val-temperatura" class="metric-value">--°C</span>
+            <span class="metric-sub">Condición del cielo</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-title">Humedad relativa</span>
+            <span id="val-humedad" class="metric-value">--%</span>
+            <span id="val-fuente-api" class="metric-sub">Fuente API</span>
+          </div>
+        </div>
+
+        <!-- Registro rápido en historial -->
+        <div class="log-action-panel">
+          <div class="log-action-title">¿Qué hiciste hoy en tu parcela? (Registrar en Historial):</div>
+          <div class="action-buttons-row">
+            <button id="btn-log-no" class="btn btn-secondary btn-sm" type="button">
+              🛑 Decidí NO regar
+            </button>
+            <button id="btn-log-si" class="btn btn-secondary btn-sm" type="button">
+              💧 SÍ regué el cultivo
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PASO 3: Historial de Decisiones Tomadas -->
+      <section class="card" aria-labelledby="sec3-heading">
+        <div class="history-header">
+          <h2 id="sec3-heading" class="card-title" style="margin-bottom: 0;">
+            <span class="step-number">3</span>
+            <span>Historial de Decisiones (<span id="history-count">0</span>)</span>
+          </h2>
+          <button id="btn-limpiar-historial" class="btn btn-sm btn-danger-outline" type="button" title="Vaciar historial">
+            Vaciar
+          </button>
+        </div>
+
+        <div id="history-container">
+          <!-- Generado dinámicamente desde localStorage -->
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Pie de página -->
+    <footer class="app-footer">
+      <p><strong>Riego Inteligente El Salvador</strong></p>
+      <p>Diseñado para evitar el desperdicio de agua y cuidar huertas escolares y cultivos familiares.</p>
+    </footer>
+
+    <!-- Lógica de la aplicación en JavaScript Vanilla -->
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

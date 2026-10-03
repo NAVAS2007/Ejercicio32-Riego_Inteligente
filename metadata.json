@@ -1,0 +1,8 @@
+{
+  "name": "Riego Inteligente El Salvador",
+  "description": "Aplicación para pequeños agricultores y huertas escolares que asesora sobre el riego según el pronóstico de lluvia en municipios de El Salvador.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
