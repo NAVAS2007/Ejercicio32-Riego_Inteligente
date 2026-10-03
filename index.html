@@ -23,14 +23,14 @@
             <p class="brand-subtitle">Huertas y Parcelas de El Salvador 🇸🇻</p>
           </div>
         </div>
-        <span class="header-badge">M4 Resiliente</span>
+        <span class="header-badge">M5 · Gemini 2.5 Flash</span>
       </div>
     </header>
 
     <!-- Contenedor Principal (Mobile-First) -->
     <main class="main-container">
       
-      <!-- Contenedor dinámico de alertas y mensajes de error/confirmación (M4) -->
+      <!-- Contenedor dinámico de alertas y mensajes de error/confirmación (M4/M5) -->
       <div id="alert-container" style="display: none;" role="region" aria-live="polite"></div>
 
       <!-- PASO 1: Consulta de Pronóstico del Municipio -->
@@ -52,14 +52,14 @@
         </div>
 
         <button id="btn-consultar" class="btn btn-primary" type="button">
-          🔍 Consultar Clima y Evaluar Riego
+          🔍 Consultar Clima y Evaluar Riego con IA
         </button>
 
-        <!-- Indicador de carga accesible y claro (M4) -->
+        <!-- Indicador de carga accesible y claro (M4/M5) -->
         <div id="loader-wrapper" class="loader-wrapper" role="status" aria-live="polite">
           <div class="spinner" aria-hidden="true"></div>
-          <p class="loader-text">Consultando pronóstico en tiempo real...</p>
-          <p class="loader-subtext">Obteniendo temperatura, probabilidad y lluvia del día para tu municipio.</p>
+          <p class="loader-text">Consultando clima y evaluando con IA...</p>
+          <p class="loader-subtext">Obteniendo datos de Open-Meteo y analizando con Google Gemini (gemini-2.5-flash).</p>
         </div>
 
         <!-- Configuración de Proveedor de Clima (Colapsable) -->
@@ -113,21 +113,37 @@
           <!-- Generado dinámicamente: NO REGAR o REGAR -->
         </div>
 
+        <!-- Indicador de Fuente del Análisis (Gemini 2.5 Flash o Fallback M1) -->
+        <div class="ia-badge-container">
+          <span id="val-ia-badge" class="ia-model-badge ia-active">
+            ✨ Asesor Agrónomo IA: gemini-2.5-flash
+          </span>
+        </div>
+
         <!-- Regla de decisión aplicada visible para transparencia -->
         <div class="rule-indicator-box">
           <span class="rule-icon" aria-hidden="true">⚖️</span>
           <div class="rule-content">
-            <strong class="rule-title">Regla de Decisión (M1):</strong>
-            <span class="rule-desc">
+            <strong id="rule-title-text" class="rule-title">Criterio Agronómico Aplicado:</strong>
+            <span id="rule-desc-text" class="rule-desc">
               Si la probabilidad de lluvia es &gt; 50% o la precipitación prevista es &gt; 2 mm ➔ <strong>NO REGAR</strong>. De lo contrario ➔ <strong>REGAR</strong>.
             </span>
           </div>
         </div>
 
-        <!-- Justificación agronómica correspondiente -->
+        <!-- Justificación técnica correspondiente -->
         <div class="motivo-box">
-          <div class="motivo-label">Justificación agronómica:</div>
+          <div class="motivo-label">Justificación técnica del agrónomo:</div>
           <p id="rec-motivo-text" class="motivo-text"></p>
+        </div>
+
+        <!-- RECOMENDACIÓN ADICIONAL PARA EL AGRICULTOR (M5) -->
+        <div id="recomendacion-adicional-box" class="adicional-box">
+          <div class="adicional-label">
+            <span aria-hidden="true">💡</span>
+            <span>Consejo agronómico adicional para la parcela:</span>
+          </div>
+          <p id="rec-adicional-text" class="adicional-text"></p>
         </div>
 
         <!-- ESTADO DETALLADO DEL CLIMA ACTUAL -->

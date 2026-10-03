@@ -615,6 +615,87 @@ body {
   word-break: break-word;
 }
 
+/* ==========================================================================
+   M5: ASESOR AGRÓNOMO IA (GEMINI 2.5 FLASH) Y RECOMENDACIÓN ADICIONAL
+   ========================================================================== */
+.ia-badge-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.ia-model-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s ease;
+}
+
+.ia-model-badge.ia-active {
+  background-color: #eff6ff;
+  border: 1.5px solid #60a5fa;
+  color: #1d4ed8;
+}
+
+.ia-model-badge.ia-fallback {
+  background-color: #fffbeb;
+  border: 1.5px solid #f59e0b;
+  color: #92400e;
+}
+
+/* Caja destacada para la recomendación adicional del agrónomo (M5) */
+.adicional-box {
+  background-color: #f0fdf4;
+  border: 2px solid #86efac;
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(22, 101, 52, 0.08);
+}
+
+.adicional-label {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #166534;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.adicional-text {
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.55;
+  color: #14532d;
+  word-break: break-word;
+}
+
+/* Tip adicional en tarjetas de historial */
+.history-tip-box {
+  background-color: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #14532d;
+  word-break: break-word;
+}
+
+.history-tip-label {
+  font-weight: 800;
+  display: inline-block;
+  margin-right: 4px;
+}
+
 /* Encabezado del estado meteorológico */
 .weather-summary-header {
   display: flex;

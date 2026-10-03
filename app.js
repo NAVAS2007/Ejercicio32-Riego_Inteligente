@@ -1,13 +1,14 @@
 /**
  * ============================================================================
  * RIEGO INTELIGENTE - EL SALVADOR
- * M1 + M2 + M3 + M4: Resiliencia, Manejo de Errores y Validación Estricta
+ * M1 + M2 + M3 + M4 + M5: Integración de Google Gemini 2.5 Flash
+ * con salida estrictamente estructurada en JSON Schema y Contingencia Resiliente
  * 
- * Requisitos M4:
- * 1. Validaciones estrictas a las entradas del usuario (municipio obligatorio).
- * 2. Indicador de carga claro (loading spinner, aria-busy y bloqueo de controles).
- * 3. Manejo robusto de errores de red, caídas de API y timeout (con AbortController y try/catch).
- * 4. Garantía de que timeouts o datos incompletos nunca corrompan el localStorage.
+ * Requisitos M5:
+ * 1. Llamada a Google Gemini (gemini-2.5-flash) con datos meteorológicos de Open-Meteo.
+ * 2. Uso estricto de responseSchema con: { regar: boolean, justificacion: string, recomendacion_adicional: string }.
+ * 3. Procesamiento en JS y despliegue destacado en UI de decisión, justificación y consejo adicional.
+ * 4. Mecanismo de contingencia (fallback): si Gemini falla o no hay clave, calcular con la regla local M1 sin interrupción.
  * ============================================================================
  */
 
@@ -22,6 +23,7 @@ const App = {
     lastRecommendation: null,
     apiProvider: 'openmeteo', // 'openmeteo' (recomendado) o 'openweathermap'
     owmApiKey: localStorage.getItem('riego_owm_key') || '',
+    geminiApiKey: localStorage.getItem('riego_gemini_key') || '',
     isFetching: false,
   },
 
@@ -280,14 +282,18 @@ const App = {
   // HELPER M4: PETICIÓN CON TIMEOUT USANDO ABORTCONTROLLER
   // Evita que la aplicación quede colgada indefinidamente en el campo
   // ==========================================================================
-  fetchConTimeout: async function(url, timeoutMs = REQUEST_TIMEOUT_MS) {
+  fetchConTimeout: async function(url, options = {}, timeoutMs = REQUEST_TIMEOUT_MS) {
+    if (typeof options === 'number') {
+      timeoutMs = options;
+      options = {};
+    }
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
       controller.abort();
     }, timeoutMs);
 
     try {
-      const response = await fetch(url, { signal: controller.signal });
+      const response = await fetch(url, { ...options, signal: controller.signal });
       return response;
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -302,7 +308,193 @@ const App = {
   },
 
   // ==========================================================================
-  // FUNCIÓN PRINCIPAL RESILIENTE: CONSULTAR PRONÓSTICO (M4)
+  // REQUISITOS M5: INTEGRACIÓN DE GOOGLE GEMINI (gemini-2.5-flash) CON RESPONSE SCHEMA
+  // Y MECANISMO DE CONTINGENCIA (FALLBACK) AUTOMÁTICO A REGLA M1
+  // ==========================================================================
+
+  /**
+   * Evalúa la necesidad de riego utilizando Google Gemini 2.5 Flash con salida
+   * estructurada JSON Schema, o activa el fallback de regla local M1 si falla o no hay clave.
+   */
+  evaluarConGeminiOFallback: async function(clima) {
+    let resultadoIA = null;
+    let fuenteUtilizada = '';
+
+    // 1. Intentar llamar al proxy server-side /api/evaluar-riego (con GEMINI_API_KEY del entorno)
+    try {
+      const respuestaServer = await this.llamarProxyGemini(clima);
+      if (respuestaServer && respuestaServer.success && respuestaServer.datos) {
+        resultadoIA = respuestaServer.datos;
+        fuenteUtilizada = 'Google Gemini (gemini-2.5-flash)';
+      } else if (respuestaServer && respuestaServer.fallback) {
+        console.info('Proxy de Gemini reportó contingencia:', respuestaServer.message);
+      }
+    } catch (errProxy) {
+      console.warn('Proxy de Gemini no respondió, evaluando contingencia:', errProxy);
+    }
+
+    // 2. Si no se resolvió con el proxy, verificar si hay clave en memoria/localStorage para llamada directa
+    const claveDirecta = this.state.geminiApiKey || (typeof window !== 'undefined' && window.__GEMINI_API_KEY__);
+    if (!resultadoIA && claveDirecta) {
+      try {
+        const respuestaDirecta = await this.llamarGeminiDirecto(clima, claveDirecta);
+        if (respuestaDirecta) {
+          resultadoIA = respuestaDirecta;
+          fuenteUtilizada = 'Google Gemini Directo (gemini-2.5-flash)';
+        }
+      } catch (errDirect) {
+        console.warn('Llamada directa a Gemini falló:', errDirect);
+      }
+    }
+
+    // 3. REQUISITO M5.4: Mecanismo de contingencia (fallback)
+    // Si Gemini falló, arrojó timeout o no hay clave, calcular con la regla lógica local M1
+    if (!resultadoIA) {
+      resultadoIA = this.calcularReglaLocalM1(clima);
+      fuenteUtilizada = 'Regla Local M1 (Modo Contingencia)';
+    }
+
+    return {
+      datos: resultadoIA,
+      fuente: fuenteUtilizada,
+      esGemini: fuenteUtilizada.includes('Gemini')
+    };
+  },
+
+  /**
+   * Llamada al proxy Express /api/evaluar-riego
+   */
+  llamarProxyGemini: async function(clima) {
+    const payload = {
+      municipio: clima.municipio,
+      temperatura: clima.tempActual,
+      precipitacionMm: clima.precipitacionMm,
+      probLluvia: clima.probLluvia,
+      humedad: clima.humedad,
+      condicion: clima.condicion
+    };
+
+    const response = await this.fetchConTimeout('/api/evaluar-riego', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }, 9000);
+
+    if (!response.ok) return null;
+    const json = await response.json();
+    return json;
+  },
+
+  /**
+   * REQUISITO M5.2: Llamada REST directa a Gemini con responseSchema estricto
+   */
+  llamarGeminiDirecto: async function(clima, apiKey) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    const prompt = `Actúa como un ingeniero agrónomo especialista en cultivos y huertas escolares/familiares en El Salvador.
+Analiza las siguientes condiciones meteorológicas reportadas para el municipio de ${clima.municipio || 'El Salvador'}:
+- Temperatura actual: ${clima.tempActual}°C
+- Precipitación estimada hoy: ${clima.precipitacionMm} mm
+- Probabilidad de lluvia hoy: ${clima.probLluvia}%
+- Humedad relativa: ${clima.humedad}%
+- Condición reportada: ${clima.condicion || 'Cielo variable'}
+
+Determina estrictamente si se debe REGAR o NO REGAR hoy.
+Criterio agronómico fundamental: si la probabilidad de lluvia supera el 50% o la precipitación prevista es superior a 2 mm, la parcela recibirá agua pluvial suficiente, por lo que NO se debe regar (regar = false) para evitar asfixia radicular, encharcamiento y lavado de fertilizantes. En caso contrario, o si las condiciones son secas o calurosas, se debe regar (regar = true).
+Proporciona una justificación técnica agronómica y una recomendación adicional práctica para el agricultor salvadoreño.`;
+
+    const body = {
+      contents: [
+        {
+          parts: [{ text: prompt }]
+        }
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            regar: {
+              type: "BOOLEAN",
+              description: "true si se aconseja regar hoy, false si se aconseja NO regar."
+            },
+            justificacion: {
+              type: "STRING",
+              description: "Justificación técnica agronómica detallada de la decisión."
+            },
+            recomendacion_adicional: {
+              type: "STRING",
+              description: "Consejo práctico adicional para el agricultor o docente de huerta escolar."
+            }
+          },
+          required: ["regar", "justificacion", "recomendacion_adicional"]
+        }
+      }
+    };
+
+    const response = await this.fetchConTimeout(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }, 9000);
+
+    if (!response.ok) {
+      throw new Error(`Gemini API respondió con código HTTP ${response.status}`);
+    }
+
+    const json = await response.json();
+    const candidateText = json.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!candidateText) {
+      throw new Error('Respuesta de Gemini sin texto estructurado.');
+    }
+
+    const parsed = JSON.parse(candidateText.trim());
+    if (typeof parsed.regar !== 'boolean' || typeof parsed.justificacion !== 'string' || typeof parsed.recomendacion_adicional !== 'string') {
+      throw new Error('El JSON devuelto por Gemini no coincide con el responseSchema requerido.');
+    }
+
+    return parsed;
+  },
+
+  /**
+   * REQUISITO M5.4: Cálculo agronómico local de contingencia (Regla M1)
+   */
+  calcularReglaLocalM1: function(clima) {
+    const probLluvia = clima.probLluvia;
+    const precipitacionMm = clima.precipitacionMm;
+    const tempActual = clima.tempActual;
+
+    const cumpleReglaNoRegar = (probLluvia > 50) || (precipitacionMm > 2);
+    const regar = !cumpleReglaNoRegar;
+
+    let justificacion = '';
+    let recomendacion_adicional = '';
+
+    if (!regar) {
+      if (probLluvia > 50 && precipitacionMm > 2) {
+        justificacion = `Se recomienda NO REGAR el cultivo. La probabilidad de lluvia para hoy es del ${probLluvia}% (supera el umbral del 50%) y la precipitación prevista es de ${precipitacionMm} mm (supera el umbral de 2 mm). El aporte pluvial natural hidratará el suelo sin necesidad de riego manual.`;
+        recomendacion_adicional = `Revisa que los surcos o camellones tengan desagüe libre para evitar encharcamientos prolongados y asfixia radicular durante las lluvias de la tarde.`;
+      } else if (probLluvia > 50) {
+        justificacion = `Se recomienda NO REGAR el cultivo. La probabilidad de lluvia para hoy es del ${probLluvia}% (supera el umbral del 50%). Regar antes de una precipitación inminente provocaría saturación hídrica del sustrato y lavado de abonos orgánicos.`;
+        recomendacion_adicional = `Monitorea el desarrollo de nubosidad hacia el final del día. Si la lluvia es escasa, comprueba la humedad al tacto (a 5 cm) antes de regar mañana temprano.`;
+      } else {
+        justificacion = `Se recomienda NO REGAR el cultivo. El volumen de lluvia previsto de ${precipitacionMm} mm supera el umbral de 2 mm. Esta precipitación aportará el agua requerida por las raíces en la huerta.`;
+        recomendacion_adicional = `Aplica una capa de rastrojo o acolchado vegetal seco (mulch) para retener al máximo la humedad que dejará la lluvia y evitar erosión del suelo.`;
+      }
+    } else {
+      justificacion = `Se recomienda REGAR el cultivo. La probabilidad de lluvia es de solo ${probLluvia}% (no supera el 50%) y la precipitación prevista es de ${precipitacionMm} mm (no supera los 2 mm), con una temperatura actual de ${tempActual}°C. Las precipitaciones serán insuficientes para las plantas.`;
+      recomendacion_adicional = `Efectúa el riego en horas frescas (temprano en la mañana o al atardecer) directamente al pie de las plantas para minimizar la pérdida de agua por evaporación.`;
+    }
+
+    return {
+      regar: regar,
+      justificacion: justificacion,
+      recomendacion_adicional: recomendacion_adicional
+    };
+  },
+
+  // ==========================================================================
+  // FUNCIÓN PRINCIPAL RESILIENTE: CONSULTAR PRONÓSTICO (M4 / M5)
   // ==========================================================================
   consultarPronostico: async function() {
     if (this.state.isFetching) return;
@@ -367,7 +559,10 @@ const App = {
       }
 
       this.state.weatherData = datosClima;
-      this.procesarRecomendacionRiego(datosClima);
+
+      // REQUISITO M5: Evaluación agronómica con Gemini 2.5 Flash o fallback resiliente a regla local M1
+      const evaluacion = await this.evaluarConGeminiOFallback(datosClima);
+      this.procesarRecomendacionRiego(datosClima, evaluacion);
 
     } catch (error) {
       // REQUISITO M4.3: Manejo adecuado de errores de red o caídas con mensajes instructivos
@@ -593,61 +788,58 @@ const App = {
   },
 
   // ==========================================================================
-  // REGLA DE DECISIÓN (M1)
+  // PROCESAMIENTO DE RECOMENDACIÓN CONSTRUCTIVA (M1 + M5)
   // ==========================================================================
-  procesarRecomendacionRiego: function(clima) {
-    const probLluvia = clima.probLluvia;
-    const precipitacionMm = clima.precipitacionMm;
-    const tempActual = clima.tempActual;
+  procesarRecomendacionRiego: function(clima, evaluacion) {
+    // Si no se proporcionó evaluación, utilizar fallback de regla local M1
+    if (!evaluacion || !evaluacion.datos) {
+      evaluacion = {
+        datos: this.calcularReglaLocalM1(clima),
+        fuente: 'Regla Local M1 (Modo Contingencia)',
+        esGemini: false
+      };
+    }
 
-    const cumpleReglaNoRegar = (probLluvia > 50) || (precipitacionMm > 2);
+    const { regar, justificacion, recomendacion_adicional } = evaluacion.datos;
 
     let veredicto = '';
     let tituloVeredicto = '';
     let claseCss = '';
     let resumen = '';
-    let justificacion = '';
 
-    if (cumpleReglaNoRegar) {
+    if (!regar) {
       veredicto = 'NO REGAR';
       tituloVeredicto = '🛑 NO REGAR';
       claseCss = 'no-regar';
-      resumen = 'No se recomienda regar hoy. La lluvia esperada aportará la humedad necesaria a la parcela.';
-
-      if (probLluvia > 50 && precipitacionMm > 2) {
-        justificacion = `Se recomienda NO REGAR el cultivo. La probabilidad de lluvia para hoy es del ${probLluvia}% (supera el umbral del 50%) y la precipitación prevista es de ${precipitacionMm} mm (supera el umbral de 2 mm). Regar en estas condiciones saturaría el suelo, desperdiciaría agua y aumentaría el riesgo de asfixia radicular. El aporte pluvial será suficiente para la huerta.`;
-      } else if (probLluvia > 50) {
-        justificacion = `Se recomienda NO REGAR el cultivo. La probabilidad de lluvia para hoy es del ${probLluvia}% (supera el umbral del 50%), con una precipitación prevista de ${precipitacionMm} mm. El riesgo de lluvia es elevado; regar ahora provocaría exceso de humedad en el suelo y lavado de fertilizantes si cae la precipitación esperada.`;
-      } else {
-        justificacion = `Se recomienda NO REGAR el cultivo. Aunque la probabilidad de lluvia es del ${probLluvia}%, el volumen de precipitación previsto es de ${precipitacionMm} mm (supera el umbral de 2 mm). Este volumen de agua natural es suficiente para hidratar el suelo de la parcela sin necesidad de riego suplementario.`;
-      }
-
+      resumen = 'No se recomienda regar hoy. La lluvia o humedad atmosférica prevista aportará el agua requerida.';
     } else {
       veredicto = 'REGAR';
       tituloVeredicto = '💧 REGAR';
       claseCss = 'si-regar';
-      resumen = 'Se recomienda regar hoy. Las precipitaciones previstas no cubrirán las necesidades hídricas del cultivo.';
-
-      justificacion = `Se recomienda REGAR el cultivo. La probabilidad de lluvia para hoy es de solo ${probLluvia}% (no supera el 50%) y la precipitación estimada es de ${precipitacionMm} mm (no supera los 2 mm), con una temperatura actual de ${tempActual}°C. Las condiciones atmosféricas indican que la huerta no recibirá agua natural suficiente. Se aconseja regar temprano en la mañana o al atardecer para evitar pérdidas por evaporación solar.`;
+      resumen = 'Se recomienda regar hoy. El cultivo necesita aporte hídrico ante la falta de lluvias suficientes.';
     }
 
-    // Guardar estado verificado de la última recomendación
+    // Guardar estado verificado de la última recomendación (M5)
     this.state.lastRecommendation = {
       municipio: clima.municipio,
       veredicto: veredicto,
-      probLluvia: probLluvia,
-      precipitacionMm: precipitacionMm,
-      temp: tempActual,
+      regar: regar,
+      probLluvia: clima.probLluvia,
+      precipitacionMm: clima.precipitacionMm,
+      temp: clima.tempActual,
       condicion: clima.condicion,
       humedad: clima.humedad,
       justificacion: justificacion,
+      recomendacionAdicional: recomendacion_adicional,
+      fuenteAnalisis: evaluacion.fuente,
+      esGemini: evaluacion.esGemini,
       fecha: new Date().toISOString()
     };
 
-    this.renderizarRecomendacion(tituloVeredicto, resumen, justificacion, claseCss, clima, cumpleReglaNoRegar);
+    this.renderizarRecomendacion(tituloVeredicto, resumen, justificacion, recomendacion_adicional, claseCss, clima, evaluacion);
   },
 
-  renderizarRecomendacion: function(titulo, resumen, justificacion, claseCss, clima, esNoRegar) {
+  renderizarRecomendacion: function(titulo, resumen, justificacion, recomendacionAdicional, claseCss, clima, evaluacion) {
     const cardEl = document.getElementById('card-recomendacion');
     if (!cardEl) return;
 
@@ -662,6 +854,28 @@ const App = {
       `;
     }
 
+    // Badge indicador de modelo IA o contingencia (M5)
+    const iaBadge = document.getElementById('val-ia-badge');
+    if (iaBadge) {
+      if (evaluacion.esGemini) {
+        iaBadge.className = 'ia-model-badge ia-active';
+        iaBadge.innerHTML = `✨ Asesor Agrónomo IA: <strong>gemini-2.5-flash</strong>`;
+      } else {
+        iaBadge.className = 'ia-model-badge ia-fallback';
+        iaBadge.innerHTML = `⚖️ Modo Contingencia: <strong>Regla Local M1</strong>`;
+      }
+    }
+
+    const ruleDesc = document.getElementById('rule-desc-text');
+    if (ruleDesc) {
+      if (evaluacion.esGemini) {
+        ruleDesc.innerHTML = `Análisis agronómico automatizado con <strong>Google Gemini (gemini-2.5-flash)</strong> y <em>responseSchema</em> estructurado según temperatura, humedad, precipitación y lluvia pluvial.`;
+      } else {
+        ruleDesc.innerHTML = `Regla de decisión agronómica: si la probabilidad de lluvia es &gt; 50% o la precipitación prevista es &gt; 2 mm ➔ <strong>NO REGAR</strong>. De lo contrario ➔ <strong>REGAR</strong>.`;
+      }
+    }
+
+    // Justificación técnica devuelta por el modelo
     const motivoEl = document.getElementById('rec-motivo-text');
     const motivoBox = document.querySelector('.motivo-box');
     if (motivoEl) {
@@ -669,6 +883,16 @@ const App = {
     }
     if (motivoBox) {
       motivoBox.className = `motivo-box ${claseCss}`;
+    }
+
+    // Recomendación adicional para el agricultor (M5)
+    const adicionalEl = document.getElementById('rec-adicional-text');
+    const adicionalBox = document.getElementById('recomendacion-adicional-box');
+    if (adicionalEl) {
+      adicionalEl.textContent = recomendacionAdicional || 'Mantén vigilancia sobre la humedad del suelo en la huerta.';
+    }
+    if (adicionalBox) {
+      adicionalBox.style.display = 'block';
     }
 
     const elMunicipio = document.getElementById('val-municipio-nombre');
@@ -810,7 +1034,9 @@ const App = {
         humedad: rec.humedad,
       },
       decisionTomada: decisionTomada,
-      sugerenciaSistema: rec.veredicto
+      sugerenciaSistema: rec.veredicto,
+      recomendacionAdicional: rec.recomendacionAdicional || '',
+      fuenteAnalisis: rec.fuenteAnalisis || 'Regla Local M1'
     };
 
     let historial = this.obtenerHistorialStorage();
@@ -919,11 +1145,23 @@ const App = {
         ? '✓ Coincidió con la sugerencia técnica' 
         : (coincidio === false ? 'ℹ️ Decisión manual del agricultor' : '');
 
+      const fuenteTxt = item.fuenteAnalisis ? (item.fuenteAnalisis.includes('Gemini') ? '✨ Gemini 2.5 Flash' : '⚖️ Regla M1') : '';
+
+      const tipHtml = item.recomendacionAdicional ? `
+        <div class="history-tip-box">
+          <span class="history-tip-label">💡 Consejo IA:</span>
+          <span>${this.escaparHtml(item.recomendacionAdicional)}</span>
+        </div>
+      ` : '';
+
       html += `
         <article class="history-item">
           <div class="history-item-top">
             <span class="history-place">📍 ${this.escaparHtml(item.municipio)}</span>
-            <span class="history-badge ${claseBadge}">${textoBadge}</span>
+            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+              ${fuenteTxt ? `<span class="header-badge" style="background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; font-size:0.72rem;">${fuenteTxt}</span>` : ''}
+              <span class="history-badge ${claseBadge}">${textoBadge}</span>
+            </div>
           </div>
 
           <div class="history-datetime">
@@ -944,6 +1182,8 @@ const App = {
               <span>🌤️ Estado:</span> <strong>${this.escaparHtml(condStr)}</strong>
             </div>
           </div>
+
+          ${tipHtml}
 
           <div class="history-footer">
             <span class="history-system-match">${this.escaparHtml(coincidenciaTxt)}</span>
